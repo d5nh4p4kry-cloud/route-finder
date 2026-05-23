@@ -739,7 +739,9 @@ function exRoads(route){const r=[],s=new Set();if(route.legs)route.legs.forEach(
 function extractICInfo(route) {
   const info = { entry: null, exit: null, via: [] };
   if (!route.legs) return info;
-  const IC_RE  = /([^\s　、。（）()「」【】\/<>]{2,20}?(?:インターチェンジ|IC(?![A-Za-z])|インター(?!ネット|フォン|バル|セクション|ナル|ポール|フェース)))/g;
+  // 首都高は「出入口」形式、NEXCO系は「IC・インターチェンジ」形式
+  const IC_RE  = /([^\s　、。（）()「」【】\/<>]{2,20}?(?:インターチェンジ|IC(?![A-Za-z])|出入口|インター(?!ネット|フォン|バル|セクション|ナル|ポール|フェース)))/g;
+  const EXIT_RE = /([^\s　、。（）()「」【】\/<>]{2,12}(?:出口|入口))(?=[^0-9A-Za-z]|$)/g;
   const JCT_RE = /([^\s　、。（）()「」【】\/<>]{2,20}?(?:JCT|ジャンクション))/g;
   let seenICs = [], viaSet = new Set();
   route.legs.forEach(leg => {
@@ -749,6 +751,11 @@ function extractICInfo(route) {
       for (const m of text.matchAll(IC_RE)) {
         const n = m[1].trim();
         if (n.length >= 3 && !seenICs.includes(n)) seenICs.push(n);
+      }
+      // 出口・入口（単独の「出口」「入口」は除外）
+      for (const m of text.matchAll(EXIT_RE)) {
+        const n = m[1].trim();
+        if (n.length >= 3 && n !== '出口' && n !== '入口' && !seenICs.includes(n)) seenICs.push(n);
       }
       for (const m of text.matchAll(JCT_RE)) {
         const n = m[1].trim();
