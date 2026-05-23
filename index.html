@@ -856,24 +856,34 @@ function extractJCTVia(route) {
 
 // ステップ座標からPlaces APIで最近傍のIC・出入口を検索（非同期）
 async function findNearestICName(location) {
-  const keywords = ['インターチェンジ', '出入口', 'IC 高速'];
-  const searches = await Promise.allSettled(
-    keywords.map(kw => new Promise(res => {
-      plcSvc.nearbySearch({location, radius:1800, keyword:kw, language:'ja'},
-        (r,s) => res(s==='OK' ? r||[] : []));
-    }))
-  );
-  const all = searches.flatMap(r => r.status==='fulfilled' ? r.value : []);
-  if (!all.length) return null;
-  // 距離が最も近いものを選択
+  // IC関連ワードを含む名前のみ有効と判定する正規表現
+  const IC_VALID = /インターチェンジ|出入口|ランプ入口|ランプ出口|(?<![^\s　])(IC|ＩＣ)(?![A-Za-z0-9])/;
+
+  const searches = await Promise.allSettled([
+    new Promise(res => plcSvc.nearbySearch(
+      {location, radius:1500, keyword:'インターチェンジ', language:'ja'},
+      (r,s) => res(s==='OK' ? r||[] : []))),
+    new Promise(res => plcSvc.nearbySearch(
+      {location, radius:1200, keyword:'出入口', language:'ja'},
+      (r,s) => res(s==='OK' ? r||[] : []))),
+  ]);
+
+  // 取得結果をフラット化し、IC関連ワードを含む名前だけに絞る
+  const valid = searches
+    .flatMap(r => r.status==='fulfilled' ? r.value : [])
+    .filter(p => IC_VALID.test(p.name));
+
+  if (!valid.length) return null;
+
+  // 最も近いものを選択
   let best = null, minD = Infinity;
-  for (const p of all) {
+  for (const p of valid) {
     const d = google.maps.geometry
       ? google.maps.geometry.spherical.computeDistanceBetween(location, p.geometry.location)
       : haverD(location, p.geometry.location);
     if (d < minD) { minD = d; best = p; }
   }
-  return best?.name || null;
+  return best ? best.name : null;
 }
 
 async function findICNames(route) {
