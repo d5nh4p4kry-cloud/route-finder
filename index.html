@@ -837,15 +837,17 @@ function extractJCTVia(route) {
 
 // ステップ座標からPlaces APIで最近傍のIC・出入口を検索（非同期）
 async function findNearestICName(location) {
-  // IC関連ワードを含む名前のみ有効と判定する正規表現
-  const IC_VALID = /インターチェンジ|出入口|ランプ|IC$|IC[^A-Za-z]|ＩＣ|JCT|ジャンクション|料金所/i;
+  const IC_VALID = /インターチェンジ|出入口|ランプ|IC|ＩＣ|JCT|ジャンクション|料金所/i;
 
   const searches = await Promise.allSettled([
     new Promise(res => plcSvc.nearbySearch(
-      {location, radius:1500, keyword:'インターチェンジ', language:'ja'},
+      {location, radius:3000, keyword:'インターチェンジ', language:'ja'},
       (r,s) => res(s==='OK' ? r||[] : []))),
     new Promise(res => plcSvc.nearbySearch(
-      {location, radius:1200, keyword:'出入口', language:'ja'},
+      {location, radius:3000, keyword:'出入口', language:'ja'},
+      (r,s) => res(s==='OK' ? r||[] : []))),
+    new Promise(res => plcSvc.nearbySearch(
+      {location, radius:3000, keyword:'高速 入口', language:'ja'},
       (r,s) => res(s==='OK' ? r||[] : []))),
   ]);
 
@@ -879,12 +881,24 @@ async function findICNames(route) {
       lastToll = step;
     }
   }
-  const [entry, exit] = await Promise.all([
-    firstToll?.start_location ? findNearestICName(firstToll.start_location) : Promise.resolve(null),
-    lastToll?.end_location    ? findNearestICName(lastToll.end_location)    : Promise.resolve(null),
-  ]);
-  result.entry = entry;
-  result.exit  = exit;
+  // 入口IC: firstTollのstart/end両方で検索し、見つかった方を採用
+  if (firstToll) {
+    const [a, b] = await Promise.all([
+      findNearestICName(firstToll.start_location),
+      findNearestICName(firstToll.end_location)
+    ]);
+    result.entry = a || b;
+  }
+  // 出口IC: lastTollのstart/end両方で検索
+  if (lastToll && lastToll !== firstToll) {
+    const [a, b] = await Promise.all([
+      findNearestICName(lastToll.start_location),
+      findNearestICName(lastToll.end_location)
+    ]);
+    result.exit = a || b;
+  } else if (lastToll) {
+    result.exit = result.entry; // 同じステップの場合
+  }
   return result;
 }
 
