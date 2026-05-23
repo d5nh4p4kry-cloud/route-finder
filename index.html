@@ -228,8 +228,6 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 .reverse-btn:disabled { opacity:.4; cursor:not-allowed; }
 
 /* ── Budget ── */
-.bsec { display:none; }
-.bsec.on { display:block; }
 .b-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
 .b-row input {
   flex:1; padding:10px 12px;
@@ -450,22 +448,6 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
         <div class="gri-item"><div class="l">距離</div><div class="v" id="genDist">--</div></div>
       </div>
     </div>
-
-    <!-- Step 2: 予算 -->
-    <div class="sec bsec" id="budgetSec">
-      <div class="sec-t"><span class="n">2</span> 有料道路予算</div>
-      <p style="font-size:12px;color:var(--text-dim);margin-bottom:6px;line-height:1.6">
-        時間短縮<strong style="color:var(--text)"> 1分あたり </strong>いくらまで支払えますか？<br>
-        <span style="color:var(--text-muted);font-size:11px">例）100円/分 → 30分短縮なら最大3,000円まで許容</span>
-      </p>
-      <div id="discPreview"></div>
-      <div class="b-row">
-        <input type="number" id="budgetIn" placeholder="50" min="1" step="10" value="50" inputmode="numeric" />
-        <span class="u">円 / 分</span>
-      </div>
-      <div style="margin-top:10px"><button class="btn btn-p" onclick="searchBudget()">最適ルートを検索</button></div>
-    </div>
-
     <!-- ステータス -->
     <div class="sbar" id="sbar"></div>
     <!-- 結果 -->
@@ -844,7 +826,7 @@ function extractJCTVia(route) {
 // ステップ座標からPlaces APIで最近傍のIC・出入口を検索（非同期）
 async function findNearestICName(location) {
   // IC関連ワードを含む名前のみ有効と判定する正規表現
-  const IC_VALID = /インターチェンジ|出入口|ランプ入口|ランプ出口|(?<![^\s　])(IC|ＩＣ)(?![A-Za-z0-9])/;
+  const IC_VALID = /インターチェンジ|出入口|ランプ|IC$|IC[^A-Za-z]|ＩＣ|JCT|ジャンクション|料金所/i;
 
   const searches = await Promise.allSettled([
     new Promise(res => plcSvc.nearbySearch(
@@ -987,7 +969,6 @@ async function startSearch(){
   if(!o||!d){setStat('warn','出発地と目的地を入力してください。');return}
   clearRoutes();
   document.getElementById('results').innerHTML='';
-  document.getElementById('budgetSec').classList.remove('on');
   document.getElementById('genInfo').classList.remove('on');
   showLoad('一般道ルートを検索中...');
   const wps=getWPs();
@@ -1005,41 +986,21 @@ async function startSearch(){
     document.getElementById('genTime').textContent=fmtD(genDurSec);
     document.getElementById('genDist').textContent=fmtDist(genDistM);
     document.getElementById('genInfo').classList.add('on');
-    // 履歴に保存
     saveHistory(stops[0].v||stops[0].inputEl?.value||'', stops[stops.length-1].v||stops[stops.length-1].inputEl?.value||'');
     setStat('info',`走行条件を自動設定: ${timeInfo}`);
-    setLM('有料道路ルートを確認中...');
-    const tr=await getRoute(o,d,false,wps);
-    const tDur=tr.routes[0].legs.reduce((s,l)=>s+l.duration.value,0);
-    if(tDur<genDurSec){
-      document.getElementById('budgetSec').classList.add('on');
-      showDiscPreview();
-      setStat('info',`有料道路で最大 ${fmtD(genDurSec-tDur)} 短縮可能。予算を入力してください。`);
-      hideLoad();
-    }else{hideLoad();showGenRec()}
+    // 有料道路ルートを自動検索
+    await searchRoutes(o,d,wps);
   }catch(e){hideLoad();setStat('err',`エラー: ${e.message}`)}
-}
-function showDiscPreview(){
-  const etc=document.getElementById('etcOn').checked,day=document.getElementById('dayType').value,ts=document.getElementById('timeSlot').value;
-  const d=getDisc('nexco',day,ts,etc),ds=getDisc('shuto',day,ts,etc);
-  let h='<div class="disc-info"><strong>適用予定ETC割引:</strong><br>';
-  h+=`NEXCO: ${d.name?`<span class="disc-badge ${d.cls}">${d.name}</span>`:'なし'}&nbsp;&nbsp;`;
-  h+=`首都高/阪神高速: ${ds.name?`<span class="disc-badge ${ds.cls}">${ds.name}</span>`:'なし'}`;
-  if(!etc)h+='<br>⚠ ETC非搭載のため割引なし';
-  h+='</div>';
-  document.getElementById('discPreview').innerHTML=h;
 }
 
 // ══════════════════════════════════════════════════════════════
 // SEARCH STEP 2
 // ══════════════════════════════════════════════════════════════
-async function searchBudget(){
-  const bpm=parseInt(document.getElementById('budgetIn').value)||0;
-  if(bpm<=0){setStat('warn','1円以上の予算を入力してください。');return}
+async function searchRoutes(o,d,wps){
   const v=document.getElementById('vType').value,etc=document.getElementById('etcOn').checked;
   const day=document.getElementById('dayType').value,ts=document.getElementById('timeSlot').value;
-  const o=getOrigin(),d=getDest(),wps=getWPs();
-  showLoad('候補を取得中...');
+  if(!o){o=getOrigin();}if(!d){d=getDest();}if(!wps){wps=getWPs();}
+  showLoad('有料道路の候補を検索中...');
   tollLeafLayers.forEach(l=>leafMap.removeLayer(l));tollLeafLayers=[];
   try{
     const cands=[];
@@ -1055,15 +1016,28 @@ async function searchBudget(){
       const icInfo={ entry:null, exit:null, via:extractJCTVia(rt) };
       cands.push({type:'direct',ri:i,dr:tr,dur,dist,saved,savedMin:Math.round(savedMin*10)/10,roads,base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:rt.summary,eff:savedMin/Math.max(ti.final,1),icInfo});
     }
-    setLM('IC検索中...');
+    setLM('一般道沿いのIC検索中（10km圏内）...');
+    // Phase 2: 一般道ルートに沿ってIC探索
     const ics=await findICs(genResult.routes[0]);
+    // Phase 2b: 有料道路ルートに沿ってもIC探索（途中乗降用）
+    if(tr.routes.length>0){
+      const tollICs=await findICs(tr.routes[0]);
+      tollICs.forEach(ic=>{
+        if(!ics.find(x=>x.name===ic.name))ics.push(ic);
+      });
+    }
     if(ics.length>0){
-      setLM(`${ics.length}件のIC検証中...`);
-      const pairs=genPairs(ics);let cnt=0;
+      setLM(`${ics.length}件のIC候補を検証中...`);
+      // ペア（入口→出口）
+      const pairs=genPairs(ics);
+      // トリプル（入口→途中降→途中乗→出口 = 渋滞迂回用）
+      const triples=genTriples(ics);
+      let cnt=0;
+      // Phase 2: ペアテスト
       for(const p of pairs){
-        if(cnt>=8)break;cnt++;
+        if(cnt>=10)break;cnt++;
         try{
-          const wr=await new Promise((res,rej)=>dirSvc.route({origin:o,destination:d,waypoints:[...wps,{location:p.a.loc,stopover:false},{location:p.b.loc,stopover:false}],travelMode:google.maps.TravelMode.DRIVING,avoidTolls:false,region:'jp'},(r,s)=>s==='OK'?res(r):rej(new Error(s))));
+          const wr=await new Promise((res,rej)=>dirSvc.route({origin:o,destination:d,waypoints:[...wps,{location:p.a.loc,stopover:false},{location:p.b.loc,stopover:false}],travelMode:google.maps.TravelMode.DRIVING,avoidTolls:false,region:'jp',drivingOptions:{departureTime:new Date(),trafficModel:google.maps.TrafficModel.BEST_GUESS}},(r,s)=>s==='OK'?res(r):rej(new Error(s))));
           if(wr?.routes.length>0){
             const rt=wr.routes[0],td=rt.legs.reduce((s,l)=>s+l.duration.value,0),tdi=rt.legs.reduce((s,l)=>s+l.distance.value,0);
             if(td<genDurSec){
@@ -1077,10 +1051,30 @@ async function searchBudget(){
           }
         }catch(e){}
       }
+      // Phase 3: トリプルテスト（途中で高速を降りて乗り直す経路 = 渋滞迂回）
+      setLM('渋滞迂回ルートを検証中...');
+      for(const t of triples){
+        if(cnt>=18)break;cnt++;
+        try{
+          const wr=await new Promise((res,rej)=>dirSvc.route({origin:o,destination:d,waypoints:[...wps,{location:t.a.loc,stopover:false},{location:t.b.loc,stopover:false},{location:t.c.loc,stopover:false}],travelMode:google.maps.TravelMode.DRIVING,avoidTolls:false,region:'jp',drivingOptions:{departureTime:new Date(),trafficModel:google.maps.TrafficModel.BEST_GUESS}},(r,s)=>s==='OK'?res(r):rej(new Error(s))));
+          if(wr?.routes.length>0){
+            const rt=wr.routes[0],td=rt.legs.reduce((s,l)=>s+l.duration.value,0),tdi=rt.legs.reduce((s,l)=>s+l.distance.value,0);
+            if(td<genDurSec){
+              const name=`${t.a.name} → ${t.b.name} → ${t.c.name}`;
+              const sd1=google.maps.geometry?google.maps.geometry.spherical.computeDistanceBetween(t.a.loc,t.b.loc):haverD(t.a.loc,t.b.loc);
+              const sd2=google.maps.geometry?google.maps.geometry.spherical.computeDistanceBetween(t.b.loc,t.c.loc):haverD(t.b.loc,t.c.loc);
+              const ti=estDirect(sd1+sd2,v,etc,day,ts,name);
+              const saved=genDurSec-td,savedMin=saved/60,cpm=savedMin>0?ti.final/savedMin:Infinity;
+              const icInfo={entry:t.a.name,exit:t.c.name,via:[t.b.name]};
+              cands.push({type:'triple',ri:0,dr:wr,dur:td,dist:tdi,saved,savedMin:Math.round(savedMin*10)/10,roads:[name],base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:`${t.a.name}→${t.b.name}→${t.c.name}`,eff:savedMin/Math.max(ti.final,1),icInfo});
+            }
+          }
+        }catch(e){}
+      }
     }
     hideLoad();
     if(!cands.length){showGenRec();setStat('warn','有料道路で時間短縮できるルートが見つかりませんでした。一般道をご利用ください。');return}
-    cands.sort((a,b)=>a.dur-b.dur);
+    cands.sort((a,b)=>a.cpm-b.cpm); // 円/分の安い順
     const top5=cands.slice(0,5);
     // Places APIで入口・出口IC名を並列取得
     showLoad('入口・出口ICを検索中...');
@@ -1093,7 +1087,7 @@ async function searchBudget(){
       }catch(e){}
     }));
     hideLoad();
-    displayResults(top5,bpm);
+    displayResults(top5);
   }catch(e){hideLoad();setStat('err',`エラー: ${e.message}`)}
 }
 
@@ -1102,8 +1096,8 @@ async function findICs(route){
   const pts=[path[0]];let acc=0;
   for(let i=1;i<path.length;i++){acc+=haverD(path[i-1],path[i]);if(acc>=15000){pts.push(path[i]);acc=0}}
   const ics=[],seen=new Set();
-  for(const pt of pts.slice(0,6)){
-    for(const kw of['インターチェンジ','高速道路 IC']){
+  for(const pt of pts.slice(0,8)){
+    for(const kw of['インターチェンジ','高速道路 IC','出入口']){
       try{const rs=await new Promise((res,rej)=>plcSvc.nearbySearch({location:pt,radius:10000,keyword:kw,language:'ja'},(r,s)=>{if(s==='OK')res(r||[]);else if(s==='ZERO_RESULTS')res([]);else rej(new Error(s))}));rs.forEach(p=>{if(!seen.has(p.name)){seen.add(p.name);ics.push({name:p.name,loc:p.geometry.location})}})}catch(e){}
     }
   }
@@ -1115,44 +1109,46 @@ function genPairs(ics){
   ps.sort((a,b)=>Math.abs(haverD(a.a.loc,a.b.loc)-50000)-Math.abs(haverD(b.a.loc,b.b.loc)-50000));
   return ps.slice(0,12);
 }
+// 3点トリプル生成：途中で高速を降りて一般道→再度乗る経路（渋滞迂回用）
+function genTriples(ics){
+  const ts=[];
+  for(let i=0;i<ics.length;i++)for(let j=i+1;j<ics.length;j++)for(let k=j+1;k<ics.length;k++){
+    const dij=haverD(ics[i].loc,ics[j].loc),djk=haverD(ics[j].loc,ics[k].loc),dik=haverD(ics[i].loc,ics[k].loc);
+    if(dij>5000&&djk>5000&&dik>15000&&dik<200000){
+      ts.push({a:ics[i],b:ics[j],c:ics[k]});
+      ts.push({a:ics[k],b:ics[j],c:ics[i]});
+    }
+  }
+  ts.sort((a,b)=>{
+    const da=haverD(a.a.loc,a.c.loc),db=haverD(b.a.loc,b.c.loc);
+    return Math.abs(da-60000)-Math.abs(db-60000);
+  });
+  return ts.slice(0,10);
+}
 
 // ══════════════════════════════════════════════════════════════
 // DISPLAY
 // ══════════════════════════════════════════════════════════════
-function displayResults(res,bpm){
+function displayResults(res){
   const v=document.getElementById('vType').value;
   const vl={light:'軽自動車',standard:'普通車',medium:'中型車'}[v];
   const etc=document.getElementById('etcOn').checked;
-  const withinCount=res.filter(r=>r.cpm<=bpm).length;
 
-  // サマリーヘッダー
   let h=`<div class="sec" style="border-color:rgba(0,188,212,.4)">
-    <div class="sec-t"><span class="n">3</span> 検索結果 (${vl}${etc?' ETC':' 現金'}) — 所要時間順</div>
+    <div class="sec-t"><span class="n">結果</span> 時短コスト安い順 (${vl}${etc?' ETC':' 現金'})</div>
     <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;padding:8px 10px;background:rgba(0,0,0,.2);border-radius:7px;line-height:1.7">
-      設定予算: <strong style="color:var(--accent)">${bpm}円/分</strong>&nbsp;&nbsp;
-      予算内: <strong style="color:var(--green)">${withinCount}件</strong>&nbsp;&nbsp;
-      予算超過: <strong style="color:var(--orange)">${res.length-withinCount}件</strong>&nbsp;&nbsp;
-      一般道: <strong style="color:var(--blue)">${fmtD(genDurSec)}</strong>
+      一般道: <strong style="color:var(--blue)">${fmtD(genDurSec)}</strong> / ${fmtDist(genDistM)}
     </div>`;
 
   res.forEach((r,i)=>{
-    const within=r.cpm<=bpm;
-    const overAmt=within?0:r.cpm-bpm; // 超過額
-    // 左ボーダー色
-    const borderCol=within?RCOLORS[i]:'rgba(255,152,0,.5)';
-    // ランクラベル
     const rkLabel=['1位','2位','3位','4位','5位'][i];
-    const budgetBadge=within
-      ? `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(76,175,80,.2);color:var(--green);border:1px solid rgba(76,175,80,.4)">✓ 予算内</span>`
-      : `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(255,152,0,.15);color:var(--orange);border:1px solid rgba(255,152,0,.4)">△ 予算超過 +${overAmt}円/分</span>`;
-    const db=r.disc?.name?`<span class="disc-badge ${r.disc.cls||''}">${r.disc.name}</span>`:'';
-    const opacity=within?'1':'0.82';
+    const db=r.disc?.name?`<span class="disc-badge ${r.disc.cls||\'\'}">${r.disc.name}</span>`:'';
 
-    h+=`<div class="rc r${i+1}" onclick="showRoute(${i})" data-i="${i}" title="タップでGoogle Mapsに経路を表示">
-      <div style="position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px;background:${borderCol}"></div>
+    h+=`<div class="rc r${i+1}" onclick="showRoute(${i})" data-i="${i}" title="タップで地図に経路表示">
+      <div style="position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px;background:${RCOLORS[i]}"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <span style="font-size:11px;font-weight:900;color:${within?RCOLORS[i]:'var(--orange)'}">所要時間 ${rkLabel}</span>
-        ${budgetBadge}
+        <span style="font-size:11px;font-weight:900;color:${RCOLORS[i]}">時短コスト ${rkLabel}</span>
+        <span style="display:inline-block;padding:3px 10px;border-radius:5px;font-size:13px;font-weight:900;background:rgba(0,188,212,.15);color:var(--accent);border:1px solid rgba(0,188,212,.4)">${r.cpm}円/分</span>
       </div>
       <div class="rc-route">${r.sum||r.roads.join('→')}</div>
       <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">${r.roads.join(', ')} ${db}</div>
@@ -1160,51 +1156,32 @@ function displayResults(res,bpm){
         <div class="rc-d"><span class="l">所要時間</span><span class="v tm">${fmtD(r.dur)}</span></div>
         <div class="rc-d"><span class="l">短縮時間</span><span class="v sv">-${fmtD(r.saved)}</span></div>
         <div class="rc-d"><span class="l">推定料金${r.disc?.rate>0?'(割引後)':''}</span><span class="v ct">¥${r.final.toLocaleString()}</span></div>
-        <div class="rc-d">
-          <span class="l">有料道路予算</span>
-          <span class="v" style="color:${within?'var(--green)':'var(--orange)'}">${r.cpm}円/分</span>
-        </div>
+        <div class="rc-d"><span class="l">時短コスト</span><span class="v ds">${r.cpm}円/分</span></div>
       </div>
       <div style="margin-top:6px;font-size:10px;color:var(--text-muted);line-height:1.6">
-        ${r.disc?.rate>0?`割引前¥${r.base.toLocaleString()} → 割引後¥${r.final.toLocaleString()} / `:''}有料道路区間 約${r.km}km / ${r.savedMin}分短縮<br>
-        必要予算: <strong style="color:${within?'var(--green)':'var(--orange)'}">${r.cpm}円/分</strong>
-        ${within?` ≤ 設定${bpm}円/分 ✓`:`（設定${bpm}円/分 を ${overAmt}円/分 超過）`}
+        ${r.disc?.rate>0?`割引前¥${r.base.toLocaleString()} → 割引後¥${r.final.toLocaleString()} / `:''}有料道路区間 約${r.km}km / ${r.savedMin}分短縮
       </div>
       ${(()=>{
         const ic=r.icInfo||{};
         const hasVia=ic.via&&ic.via.length>0;
         const hasAny=ic.entry||ic.exit||hasVia;
         if(!hasAny)return '';
-        return `<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:7px;font-size:11px;line-height:1.9">
-          ${ic.entry?`<div><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">入口IC / 出入口</span><br><strong style="color:var(--blue)">🔵 ${ic.entry}</strong></div>`:''}
-          ${hasVia?`<div style="margin-top:${ic.entry?'4px':'0'}"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">主な経由地</span><br><span style="color:var(--text-dim)">⬇ ${ic.via.join(' → ')}</span></div>`:''}
-          ${ic.exit?`<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">出口IC / 出入口</span><br><strong style="color:var(--red)">🔴 ${ic.exit}</strong></div>`:''}
-        </div>`;
+        return '<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:7px;font-size:11px;line-height:1.9">'
+          +(ic.entry?'<div><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">入口</span><br><strong style="color:var(--blue)">\u{1F535} '+ic.entry+'</strong></div>':'')
+          +(hasVia?'<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">経由</span><br><span style="color:var(--text-dim)">\u2B07 '+ic.via.join(' → ')+'</span></div>':'')
+          +(ic.exit?'<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">出口</span><br><strong style="color:var(--red)">\u{1F534} '+ic.exit+'</strong></div>':'')
+          +'</div>';
       })()}
     </div>`;
   });
-
-  // 予算内が0件の場合の追記
-  if(withinCount===0){
-    h+=`<div style="padding:10px;background:rgba(255,152,0,.08);border:1px solid rgba(255,152,0,.3);border-radius:8px;font-size:12px;color:var(--orange);line-height:1.6">
-      ⚠ 設定予算（${bpm}円/分）内のルートは見つかりませんでした。<br>
-      最もコスト効率が良いルートは <strong>${Math.min(...res.map(r=>r.cpm))}円/分</strong> です。予算を上げるか一般道をご利用ください。
-    </div>`;
-  }
   h+='</div>';
-
   document.getElementById('results').innerHTML=h;
   window._sr=res;
-  // 予算内の最速ルートを最初に表示
-  const firstWithin=res.findIndex(r=>r.cpm<=bpm);
-  showRoute(firstWithin>=0?firstWithin:0);
-  const msg=withinCount>0
-    ?`所要時間順 ${res.length}件を表示（予算内 ${withinCount}件・予算超過 ${res.length-withinCount}件）`
-    :`${res.length}件を表示（全て予算超過。最低必要予算: ${Math.min(...res.map(r=>r.cpm))}円/分）`;
-  setStat(withinCount>0?'ok':'warn', msg);
+  if(res.length>0) showRoute(0);
+  setStat('ok',`${res.length}件の候補を発見（時短コスト安い順）`);
   document.getElementById('legend').style.display='block';
 }
-// Google Maps でルートを新規タブ（スマホはアプリ）で開く
+
 function showRoute(i){
   tollLeafLayers.forEach(l=>leafMap.removeLayer(l)); tollLeafLayers=[];
   const rs=window._sr; if(!rs?.[i]) return;
