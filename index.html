@@ -764,14 +764,12 @@ function onMapsOK(){
   map=new google.maps.Map(document.getElementById('map'),{
     center:{lat:35.68,lng:139.76},zoom:10,
     styles:[
-      {elementType:'geometry',stylers:[{color:'#1a2634'}]},
-      {elementType:'labels.text.stroke',stylers:[{color:'#1a2634'}]},
-      {elementType:'labels.text.fill',stylers:[{color:'#6b8a9e'}]},
-      {featureType:'road',elementType:'geometry',stylers:[{color:'#2d4a5e'}]},
-      {featureType:'road.highway',elementType:'geometry',stylers:[{color:'#3a5f7a'}]},
-      {featureType:'water',elementType:'geometry',stylers:[{color:'#0d1b2a'}]},
       {featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]},
-      {featureType:'transit',stylers:[{visibility:'off'}]}
+      {featureType:'transit',stylers:[{visibility:'off'}]},
+      {featureType:'road.highway',elementType:'geometry',stylers:[{color:'#b3cde0'}]},
+      {featureType:'road.highway',elementType:'labels.text.fill',stylers:[{color:'#003366'}]},
+      {elementType:'labels.text.stroke',stylers:[{color:'#ffffff'}]},
+      {elementType:'labels.text.fill',stylers:[{color:'#333333'}]},
     ],
     mapTypeControl:false,streetViewControl:false,fullscreenControl:false,
     gestureHandling:'greedy' // iOSでシングルフィンガードラッグを有効に
@@ -1199,39 +1197,47 @@ function displayResults(res,bpm){
 }
 // Google Maps でルートを新規タブ（スマホはアプリ）で開く
 function showRouteInMaps(i) {
-  const rs = window._sr; if (!rs?.[i]) return;
-  const r = rs[i];
-  const route = r.dr.routes[r.ri||0];
-  const legs  = route.legs;
-
-  const origin = `${legs[0].start_location.lat()},${legs[0].start_location.lng()}`;
-  const dest   = `${legs[legs.length-1].end_location.lat()},${legs[legs.length-1].end_location.lng()}`;
-
-  // 経由地（複数レグがある場合）
-  const wps = legs.length > 1
-    ? legs.slice(0,-1).map(l=>`${l.end_location.lat()},${l.end_location.lng()}`).join('|')
-    : '';
-
-  let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving`;
-  if (wps) url += `&waypoints=${wps}`;
-
-  window.open(url, '_blank');
+  // 後方互換のために残す
 }
 
-function closeRouteFrame() {
-  // 互換性のために残す（呼び出し元がある場合に備え）
-}
+function closeRouteFrame() {}
 
 function showRoute(i){
+  tollRenderers.forEach(r=>r.setMap(null)); tollRenderers=[];
   const rs=window._sr; if(!rs?.[i]) return;
+
   // カードのハイライト
   document.querySelectorAll('.rc').forEach(c=>c.style.outline='');
   const sel=document.querySelector(`.rc[data-i="${i}"]`);
   if(sel) sel.style.outline=`2px solid ${RCOLORS[i]||'var(--accent)'}`;
 
-  // Google Maps を開く
-  showRouteInMaps(i);
+  const r=rs[i];
+  // Directions APIのレスポンスをそのまま描画（カード表示と完全一致）
+  const rdr=new google.maps.DirectionsRenderer({
+    map,
+    directions:r.dr,
+    routeIndex:r.ri||0,
+    polylineOptions:{
+      strokeColor:RCOLORS[i]||'#ffd700',
+      strokeWeight:6,
+      strokeOpacity:.9,
+      zIndex:10
+    },
+    suppressMarkers:false
+  });
+  tollRenderers.push(rdr);
 
+  // 経路全体が見えるようにズーム調整
+  const bounds=new google.maps.LatLngBounds();
+  r.dr.routes[r.ri||0].legs.forEach(l=>{
+    bounds.extend(l.start_location);
+    bounds.extend(l.end_location);
+  });
+  map.fitBounds(bounds,{top:60,right:40,bottom:40,left:isMobile()?40:460});
+
+  document.getElementById('legend').style.display='block';
+
+  // モバイルはパネルを閉じてマップを表示
   if(isMobile()&&panelOpen) togglePanel();
 }
 function showGenRec(){
