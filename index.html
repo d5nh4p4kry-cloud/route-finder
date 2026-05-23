@@ -430,27 +430,24 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
         <label>🔧 ETC搭載</label>
         <label class="toggle"><input type="checkbox" id="etcOn" checked disabled /><span class="sl"></span></label>
       </div>
-      <div class="row-2">
-        <div class="ig">
-          <label>📅 曜日</label>
-          <select id="dayType" disabled>
-            <option value="weekday">平日</option>
-            <option value="holiday">休日（土日祝）</option>
-            <option value="peak_holiday">繁忙期（GW等）</option>
-          </select>
-        </div>
-        <div class="ig">
-          <label>🕐 時間帯</label>
-          <select id="timeSlot" disabled>
-            <option value="morning_rush">朝 6〜9時</option>
-            <option value="daytime" selected>昼 9〜17時</option>
-            <option value="evening_rush">夕 17〜20時</option>
-            <option value="night">夜 20〜22時</option>
-            <option value="late_night">深夜 22〜0時</option>
-            <option value="midnight">深夜 0〜4時</option>
-            <option value="early_morning">早朝 4〜6時</option>
-          </select>
-        </div>
+      <!-- 曜日・時間帯は自動設定（非表示） -->
+      <select id="dayType" style="display:none" disabled>
+        <option value="weekday">平日</option>
+        <option value="holiday">休日（土日祝）</option>
+        <option value="peak_holiday">繁忙期（GW等）</option>
+      </select>
+      <select id="timeSlot" style="display:none" disabled>
+        <option value="morning_rush">朝 6〜9時</option>
+        <option value="daytime" selected>昼 9〜17時</option>
+        <option value="evening_rush">夕 17〜20時</option>
+        <option value="night">夜 20〜22時</option>
+        <option value="late_night">深夜 22〜0時</option>
+        <option value="midnight">深夜 0〜4時</option>
+        <option value="early_morning">早朝 4〜6時</option>
+      </select>
+      <div id="autoTimeLabel" style="font-size:11px;color:var(--text-muted);padding:6px 2px;display:flex;align-items:center;gap:6px;">
+        <span style="opacity:.6">🕐</span>
+        <span id="autoTimeTxt">走行条件: 接続後に自動設定</span>
       </div>
       <button class="btn btn-p" id="searchBtn" disabled onclick="startSearch()">ルート検索開始</button>
     </div>
@@ -592,7 +589,10 @@ function autoSetDateTime() {
   const DL={weekday:'平日',holiday:'休日',peak_holiday:'繁忙期休日'};
   const TL={midnight:'深夜0〜4時',early_morning:'早朝4〜6時',morning_rush:'朝6〜9時',
             daytime:'昼間9〜17時',evening_rush:'夕方17〜20時',night:'夜間20〜22時',late_night:'深夜22〜0時'};
-  return `${DL[dayType]} / ${TL[timeSlot]}`;
+  const label = `${DL[dayType]} / ${TL[timeSlot]}`;
+  const el = document.getElementById('autoTimeTxt');
+  if (el) el.textContent = `走行条件（自動）: ${label}`;
+  return label;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -799,6 +799,7 @@ function onMapsOK(){
   });
   renderStops();
   setStat('ok','API接続完了。出発地・目的地を入力してください。');
+  autoSetDateTime(); // 接続直後に現在時刻で自動設定
   // 祝日データをバックグラウンドで取得・更新
   loadHolidays().catch(()=>{});
   // Show save button if not yet saved
