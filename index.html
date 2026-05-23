@@ -327,6 +327,9 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 </head>
 <body>
 
+<!-- デバッグパネル（問題特定後に削除） -->
+<div id="dbg" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a0a0a;border-bottom:2px solid #ef5350;padding:10px 14px;font-family:monospace;font-size:12px;color:#ff8a80;max-height:40vh;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+
 <!-- Header -->
 <header class="header">
   <div class="header-left">
@@ -481,6 +484,24 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 </div>
 
 <script>
+// ══════════════════════════════════════════════════════════════
+// DEBUG (iPhone用 画面内エラー表示)
+// ══════════════════════════════════════════════════════════════
+const dbgEl = document.getElementById('dbg');
+function dbg(msg, color) {
+  dbgEl.style.display = 'block';
+  const line = document.createElement('div');
+  line.style.color = color || '#ff8a80';
+  line.style.borderBottom = '1px solid #3a1a1a';
+  line.style.padding = '3px 0';
+  line.textContent = `[${new Date().toLocaleTimeString('ja')}] ${msg}`;
+  dbgEl.appendChild(line);
+  dbgEl.scrollTop = dbgEl.scrollHeight;
+}
+// 未キャッチエラーをすべて表示
+window.addEventListener('error', e => dbg(`❌ ${e.message} (${e.filename?.split('/').pop()}:${e.lineno})`, '#ff5252'));
+window.addEventListener('unhandledrejection', e => dbg(`❌ Promise: ${e.reason}`, '#ff5252'));
+
 // connectMap をラップしてデバッグログ追加
 const _origConnect = window.connectMap;
 
@@ -668,16 +689,26 @@ function getWPs(){return stops.slice(1,-1).map(s=>({location:s.place?.geometry?s
 // ══════════════════════════════════════════════════════════════
 function connectMap(){
   const key=document.getElementById('apiKey').value.trim();
+  dbg(`🔑 接続開始 key=${key?key.slice(0,8)+'…':'(空)'}`);
   if(!key){alert('APIキーを入力してください');return}
   const s=document.createElement('script');
-  s.src='https://maps.googleapis.com/maps/api/js?key='+key+'&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP';
+  const src=`https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP`;
+  dbg(`📡 script追加中…`);
+  s.src=src;
   s.async=true;
-  s.onerror=function(){alert('API読み込み失敗。キーを確認してください。');};
+  s.onload=()=>dbg('✅ Google Maps script読み込み完了', '#69f0ae');
+  s.onerror=(e)=>{
+    dbg(`❌ script読み込み失敗: ${JSON.stringify(e)}`, '#ff5252');
+    alert('API読み込み失敗。キーを確認してください。');
+  };
   document.head.appendChild(s);
+  dbg('📌 script要素をheadに追加しました');
 }
 function onMapsOK(){
+  dbg('✅ onMapsOK() 呼び出し成功', '#69f0ae');
   try {
   document.getElementById('initScr').style.display='none';
+  dbg('🗺 Map初期化開始…');
   map=new google.maps.Map(document.getElementById('map'),{
     center:{lat:35.68,lng:139.76},zoom:10,
     styles:[
@@ -700,6 +731,7 @@ function onMapsOK(){
   });
   renderStops();
   setStat('ok','API接続完了。出発地・目的地を入力してください。');
+  dbg('✅ 初期化完了', '#69f0ae');
   // Show save button if not yet saved
   const saved=SS.get('rf_api_key');
   const current=document.getElementById('apiKey').value.trim();
@@ -708,6 +740,7 @@ function onMapsOK(){
     document.getElementById('savedBadge').style.display='none';
   }
   } catch(err) {
+    dbg(`❌ onMapsOK内エラー: ${err.message}`, '#ff5252');
   }
   // try-catch外でパネルを開く（エラーが出ても必ず実行）
   if(isMobile()&&!panelOpen) togglePanel();
@@ -733,6 +766,34 @@ function getRoute(o,d,at,wps=[]){
 }
 const TKWS=['高速','有料','Expwy','自動車道','首都高','東名','中央道','関越','東北道','常磐道','圏央道','外環','湾岸','アクアライン','名神','近畿','阪神高速','九州道','中国道'];
 function exRoads(route){const r=[],s=new Set();if(route.legs)route.legs.forEach(l=>l.steps.forEach(st=>{const inst=st.instructions||'';for(const k of TKWS){if(inst.includes(k)){const m=inst.match(/([\u4e00-\u9fff\u3040-\u30ffA-Za-z0-9ー]+(?:高速|自動車道|有料道路|Expwy))/);const n=m?m[1]:k;if(!s.has(n)){s.add(n);r.push(n)}break}}}));return r.length?r:['有料道路']}
+
+// IC・JCT情報をDirections APIのステップから抽出
+function extractICInfo(route) {
+  const info = { entry: null, exit: null, via: [] };
+  if (!route.legs) return info;
+  const IC_RE  = /([^\s　、。（）()「」【】\/<>]{2,20}?(?:インターチェンジ|IC(?![A-Za-z])|インター(?!ネット|フォン|バル|セクション|ナル|ポール|フェース)))/g;
+  const JCT_RE = /([^\s　、。（）()「」【】\/<>]{2,20}?(?:JCT|ジャンクション))/g;
+  let seenICs = [], viaSet = new Set();
+  route.legs.forEach(leg => {
+    (leg.steps || []).forEach(step => {
+      const text = (step.instructions || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+      if (!TKWS.some(kw => text.includes(kw))) return;
+      for (const m of text.matchAll(IC_RE)) {
+        const n = m[1].trim();
+        if (n.length >= 3 && !seenICs.includes(n)) seenICs.push(n);
+      }
+      for (const m of text.matchAll(JCT_RE)) {
+        const n = m[1].trim();
+        if (n.length >= 3) viaSet.add(n);
+      }
+    });
+  });
+  if (seenICs.length > 0) info.entry = seenICs[0];
+  if (seenICs.length > 1) info.exit  = seenICs[seenICs.length - 1];
+  else if (seenICs.length === 1) info.exit = seenICs[0];
+  info.via = [...viaSet].slice(0, 3);
+  return info;
+}
 
 // ══════════════════════════════════════════════════════════════
 // SEARCH HISTORY
@@ -821,6 +882,7 @@ function toggleHist() {
   arrow.style.transform = open ? 'rotate(180deg)' : '';
 }
 
+
 async function startSearch(){
   const o=getOrigin(),d=getDest();
   if(!o||!d){setStat('warn','出発地と目的地を入力してください。');return}
@@ -886,7 +948,8 @@ async function searchBudget(){
       const roads=exRoads(rt),ti=estToll(dist,genDistM,v,etc,day,ts,roads);
       const saved=genDurSec-dur,savedMin=saved/60;
       const cpm=savedMin>0?ti.final/savedMin:Infinity;
-      cands.push({type:'direct',ri:i,dr:tr,dur,dist,saved,savedMin:Math.round(savedMin*10)/10,roads,base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:rt.summary,eff:savedMin/Math.max(ti.final,1)});
+      const icInfo=extractICInfo(rt);
+      cands.push({type:'direct',ri:i,dr:tr,dur,dist,saved,savedMin:Math.round(savedMin*10)/10,roads,base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:rt.summary,eff:savedMin/Math.max(ti.final,1),icInfo});
     }
     setLM('IC検索中...');
     const ics=await findICs(genResult.routes[0]);
@@ -904,7 +967,8 @@ async function searchBudget(){
               const sd=google.maps.geometry?google.maps.geometry.spherical.computeDistanceBetween(p.a.loc,p.b.loc):haverD(p.a.loc,p.b.loc);
               const ti=estDirect(sd,v,etc,day,ts,name);
               const saved=genDurSec-td,savedMin=saved/60,cpm=savedMin>0?ti.final/savedMin:Infinity;
-              cands.push({type:'wp',ri:0,dr:wr,dur:td,dist:tdi,saved,savedMin:Math.round(savedMin*10)/10,roads:[name],base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:`${p.a.name}経由`,eff:savedMin/Math.max(ti.final,1)});
+              const icInfo={entry:p.a.name,exit:p.b.name,via:[]};
+              cands.push({type:'wp',ri:0,dr:wr,dur:td,dist:tdi,saved,savedMin:Math.round(savedMin*10)/10,roads:[name],base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:`${p.a.name}経由`,eff:savedMin/Math.max(ti.final,1),icInfo});
             }
           }
         }catch(e){}
@@ -991,6 +1055,20 @@ function displayResults(res,bpm){
         必要予算: <strong style="color:${within?'var(--green)':'var(--orange)'}">${r.cpm}円/分</strong>
         ${within?` ≤ 設定${bpm}円/分 ✓`:`（設定${bpm}円/分 を ${overAmt}円/分 超過）`}
       </div>
+      ${(()=>{
+        const ic=r.icInfo||{};
+        const hasIC=ic.entry||ic.exit||ic.via?.length>0;
+        if(!hasIC)return '';
+        const viaStr=ic.via&&ic.via.length>0?` → <span style="color:var(--text-dim)">${ic.via.join(' → ')}</span> → `:'→';
+        return `<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:7px;font-size:11px;line-height:1.8">
+          <div><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">入口IC</span><br>
+            <strong style="color:var(--blue)">🔵 ${ic.entry||'不明'}</strong></div>
+          ${ic.via&&ic.via.length>0?`<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">主な経由地</span><br>
+            <span style="color:var(--text-dim)">⬇ ${ic.via.join(' → ')}</span></div>`:''}
+          <div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">出口IC</span><br>
+            <strong style="color:var(--red)">🔴 ${ic.exit||'不明'}</strong></div>
+        </div>`;
+      })()}
     </div>`;
   });
 
