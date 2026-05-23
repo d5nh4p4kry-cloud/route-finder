@@ -740,6 +740,8 @@ function getWPs(){return stops.slice(1,-1).map(s=>({location:s.place?.geometry?s
 function connectMap(){
   const key=document.getElementById('apiKey').value.trim();
   if(!key){alert('APIキーを入力してください');return}
+  document.querySelector('.api-btn.connect').textContent='接続中...';
+  document.querySelector('.api-btn.connect').style.opacity='0.5';
   const s=document.createElement('script');
   s.src='https://maps.googleapis.com/maps/api/js?key='+key+'&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP';
   s.async=true;
@@ -747,7 +749,9 @@ function connectMap(){
   document.head.appendChild(s);
 }
 function onMapsOK(){
-  // initScrを完全にDOMから除去（Leafletの初期化に干渉するため）
+  // 接続成功表示
+  const cb=document.querySelector('.api-btn.connect');
+  if(cb){cb.textContent='接続済✓';cb.style.opacity='1';cb.style.background='#2e7d32';}
   const initEl=document.getElementById('initScr');
   if(initEl) initEl.remove();
 
@@ -1150,7 +1154,7 @@ function displayResults(res){
 
   res.forEach((r,i)=>{
     const rkLabel=['1位','2位','3位','4位','5位'][i];
-    const db=r.disc?.name?`<span class="disc-badge ${r.disc.cls||\'\'}">${r.disc.name}</span>`:'';
+    const db=r.disc?.name?`<span class="disc-badge ${r.disc.cls||''}">${r.disc.name}</span>`:'';
 
     h+=`<div class="rc r${i+1}" onclick="showRoute(${i})" data-i="${i}" title="タップで地図に経路表示">
       <div style="position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px;background:${RCOLORS[i]}"></div>
