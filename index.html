@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ルートファインダー v4</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -26,8 +28,9 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   top:calc(56px + var(--safe-top));
   left:0; right:0; bottom:0;
   z-index:0;
-  background:#e8f0e8;
 }
+/* Leafletのz-index調整 */
+.leaflet-top, .leaflet-bottom { z-index:10 !important; }
 #initScr {
   position:absolute; inset:0; z-index:1;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -347,7 +350,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 </header>
 <div class="header-h"></div>
 
-<!-- Map -->
+<!-- Map (Leaflet) -->
 <div id="map">
   <div id="initScr">
     <div class="bi">🗺️</div>
@@ -359,6 +362,8 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
     </div>
   </div>
 </div>
+<!-- Google Maps PlacesService用の隠しコンテナ -->
+<div id="gmap-hidden" style="position:absolute;width:1px;height:1px;visibility:hidden;overflow:hidden;"></div>
 
 <!-- Legend -->
 <div class="legend" id="legend">
@@ -486,8 +491,10 @@ const _origConnect = window.connectMap;
 // ══════════════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════════════
-let map, dirSvc, plcSvc;
-let genRenderer = null, tollRenderers = [];
+let map=null; // Google Maps（PlacesService・DirectionsService用 隠し）
+let leafMap=null; // Leaflet（地図表示用）
+let dirSvc, plcSvc;
+let genLeafLayer=null, tollLeafLayers=[];
 let genResult = null, genDurSec = 0, genDistM = 0;
 const RCOLORS = ['#ffd700','#c0c0c0','#cd7f32','#42a5f5','#ab47bc'];
 let stops = [], stopIdCnt = 0;
@@ -761,45 +768,36 @@ function connectMap(){
 }
 function onMapsOK(){
   try {
-  document.getElementById('initScr').style.display='none';
-  map=new google.maps.Map(document.getElementById('map'),{
-    center:{lat:35.68,lng:139.76},zoom:10,
-    styles:[
-      {featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]},
-      {featureType:'transit',stylers:[{visibility:'off'}]},
-      {featureType:'road.highway',elementType:'geometry',stylers:[{color:'#b3cde0'}]},
-      {featureType:'road.highway',elementType:'labels.text.fill',stylers:[{color:'#003366'}]},
-      {elementType:'labels.text.stroke',stylers:[{color:'#ffffff'}]},
-      {elementType:'labels.text.fill',stylers:[{color:'#333333'}]},
-    ],
-    mapTypeControl:false,streetViewControl:false,fullscreenControl:false,
-    gestureHandling:'greedy' // iOSでシングルフィンガードラッグを有効に
-  });
-  dirSvc=new google.maps.DirectionsService();
-  plcSvc=new google.maps.places.PlacesService(map);
-  ['vType','etcOn','dayType','timeSlot','searchBtn','addWpBtn','revBtn'].forEach(id=>{
-    const el=document.getElementById(id);if(el)el.disabled=false;
-  });
-  renderStops();
-  setStat('ok','API接続完了。出発地・目的地を入力してください。');
-  autoSetDateTime(); // 接続直後に現在時刻で自動設定
-  // 祝日データをバックグラウンドで取得・更新
-  loadHolidays().catch(()=>{});
-  // Show save button if not yet saved
-  const saved=SS.get('rf_api_key');
-  const current=document.getElementById('apiKey').value.trim();
-  if(!saved||saved!==current){
-    document.getElementById('saveBtn').style.display = CAN_STORE ? 'inline' : 'none';
-    document.getElementById('savedBadge').style.display='none';
-  }
+    document.getElementById('initScr').style.display='none';
+    // Google Mapsは隠しdivで初期化（DirectionsService・PlacesService専用）
+    map=new google.maps.Map(document.getElementById('gmap-hidden'),{
+      center:{lat:35.68,lng:139.76},zoom:10
+    });
+    dirSvc=new google.maps.DirectionsService();
+    plcSvc=new google.maps.places.PlacesService(map);
+    // Leafletで地図を表示（OpenStreetMapタイル）
+    leafMap=L.map('map',{center:[35.68,139.76],zoom:10});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom:19
+    }).addTo(leafMap);
+    ['vType','etcOn','dayType','timeSlot','searchBtn','addWpBtn','revBtn'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.disabled=false;
+    });
+    renderStops();
+    setStat('ok','API接続完了。出発地・目的地を入力してください。');
+    autoSetDateTime();
+    loadHolidays().catch(()=>{});
+    const saved=SS.get('rf_api_key');
+    const current=document.getElementById('apiKey').value.trim();
+    if(CAN_STORE&&(!saved||saved!==current)){
+      document.getElementById('saveBtn').style.display='inline';
+      document.getElementById('savedBadge').style.display='none';
+    }
   } catch(err) {
+    alert('初期化エラー: '+err.message);
   }
-  // try-catch外でパネルを開く（エラーが出ても必ず実行）
   if(isMobile()&&!panelOpen) togglePanel();
-  // マップコンテナ確定後にリサイズを複数回強制してタイルを確実に読み込む
-  [100, 300, 700].forEach(ms => setTimeout(() => {
-    if(map){ google.maps.event.trigger(map,'resize'); map.setCenter({lat:35.68,lng:139.76}); }
-  }, ms));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -811,7 +809,11 @@ function hideLoad(){document.getElementById('loadOv').classList.remove('on')}
 function setLM(m){document.getElementById('loadTxt').textContent=m}
 function fmtD(s){const h=Math.floor(s/3600),m=Math.round((s%3600)/60);return h>0?`${h}時間${m}分`:`${m}分`}
 function fmtDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${m}m`}
-function clearRoutes(){if(genRenderer){genRenderer.setMap(null);genRenderer=null}tollRenderers.forEach(r=>r.setMap(null));tollRenderers=[];document.getElementById('legend').style.display='none'}
+function clearRoutes(){
+  if(genLeafLayer){leafMap.removeLayer(genLeafLayer);genLeafLayer=null}
+  tollLeafLayers.forEach(l=>leafMap.removeLayer(l));tollLeafLayers=[];
+  document.getElementById('legend').style.display='none';
+}
 function haverD(a,b){const R=6371000,toR=Math.PI/180,dLat=(b.lat()-a.lat())*toR,dLng=(b.lng()-a.lng())*toR;const x=Math.sin(dLat/2)**2+Math.cos(a.lat()*toR)*Math.cos(b.lat()*toR)*Math.sin(dLng/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
 function getRoute(o,d,at,wps=[]){
   return new Promise((res,rej)=>{
@@ -995,7 +997,11 @@ async function startSearch(){
     const legs=r.routes[0].legs;
     genDurSec=legs.reduce((s,l)=>s+l.duration.value,0);
     genDistM=legs.reduce((s,l)=>s+l.distance.value,0);
-    genRenderer=new google.maps.DirectionsRenderer({map,directions:r,routeIndex:0,polylineOptions:{strokeColor:'#42a5f5',strokeWeight:5,strokeOpacity:.7}});
+    genLeafLayer=L.polyline(
+      r.routes[0].overview_path.map(p=>[p.lat(),p.lng()]),
+      {color:'#4285f4',weight:5,opacity:.8}
+    ).addTo(leafMap);
+    leafMap.fitBounds(genLeafLayer.getBounds(),{padding:[40,40]});
     document.getElementById('genTime').textContent=fmtD(genDurSec);
     document.getElementById('genDist').textContent=fmtDist(genDistM);
     document.getElementById('genInfo').classList.add('on');
@@ -1034,7 +1040,7 @@ async function searchBudget(){
   const day=document.getElementById('dayType').value,ts=document.getElementById('timeSlot').value;
   const o=getOrigin(),d=getDest(),wps=getWPs();
   showLoad('候補を取得中...');
-  tollRenderers.forEach(r=>r.setMap(null));tollRenderers=[];
+  tollLeafLayers.forEach(l=>leafMap.removeLayer(l));tollLeafLayers=[];
   try{
     const cands=[];
     const tr=await getRoute(o,d,false,wps);
@@ -1199,48 +1205,30 @@ function displayResults(res,bpm){
   document.getElementById('legend').style.display='block';
 }
 // Google Maps でルートを新規タブ（スマホはアプリ）で開く
-function showRouteInMaps(i) {
-  // 後方互換のために残す
-}
-
-function closeRouteFrame() {}
-
 function showRoute(i){
-  tollRenderers.forEach(r=>r.setMap(null)); tollRenderers=[];
+  tollLeafLayers.forEach(l=>leafMap.removeLayer(l)); tollLeafLayers=[];
   const rs=window._sr; if(!rs?.[i]) return;
-
-  // カードのハイライト
   document.querySelectorAll('.rc').forEach(c=>c.style.outline='');
   const sel=document.querySelector(`.rc[data-i="${i}"]`);
   if(sel) sel.style.outline=`2px solid ${RCOLORS[i]||'var(--accent)'}`;
-
   const r=rs[i];
-  // Directions APIのレスポンスをそのまま描画（カード表示と完全一致）
-  const rdr=new google.maps.DirectionsRenderer({
-    map,
-    directions:r.dr,
-    routeIndex:r.ri||0,
-    polylineOptions:{
-      strokeColor:RCOLORS[i]||'#ffd700',
-      strokeWeight:6,
-      strokeOpacity:.9,
-      zIndex:10
-    },
-    suppressMarkers:false
+  // Directions APIの経路データをLeafletポリラインとして描画（カード表示と完全一致）
+  const route=r.dr.routes[r.ri||0];
+  const path=route.overview_path.map(p=>[p.lat(),p.lng()]);
+  const layer=L.polyline(path,{color:RCOLORS[i]||'#ffd700',weight:7,opacity:.9}).addTo(leafMap);
+  tollLeafLayers.push(layer);
+  // 出発地・目的地マーカー
+  const sLeg=route.legs[0], eLeg=route.legs[route.legs.length-1];
+  const sm=L.circleMarker([sLeg.start_location.lat(),sLeg.start_location.lng()],
+    {color:'#fff',fillColor:'#4285f4',fillOpacity:1,radius:8,weight:2}).addTo(leafMap);
+  const em=L.circleMarker([eLeg.end_location.lat(),eLeg.end_location.lng()],
+    {color:'#fff',fillColor:'#ea4335',fillOpacity:1,radius:8,weight:2}).addTo(leafMap);
+  tollLeafLayers.push(sm,em);
+  leafMap.fitBounds(layer.getBounds(),{
+    paddingTopLeft:[isMobile()?20:440,60],
+    paddingBottomRight:[20,20]
   });
-  tollRenderers.push(rdr);
-
-  // 経路全体が見えるようにズーム調整
-  const bounds=new google.maps.LatLngBounds();
-  r.dr.routes[r.ri||0].legs.forEach(l=>{
-    bounds.extend(l.start_location);
-    bounds.extend(l.end_location);
-  });
-  map.fitBounds(bounds,{top:60,right:40,bottom:40,left:isMobile()?40:460});
-
   document.getElementById('legend').style.display='block';
-
-  // モバイルはパネルを閉じてマップを表示
   if(isMobile()&&panelOpen) togglePanel();
 }
 function showGenRec(){
