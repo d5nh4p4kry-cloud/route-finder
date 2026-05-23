@@ -359,22 +359,6 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   </div>
 </div>
 
-<!-- Google Maps Embed iframe（ルートカードクリック時に表示） -->
-<iframe id="routeFrame" src="about:blank" allowfullscreen loading="lazy"
-  style="display:none;position:fixed;border:0;z-index:6;"></iframe>
-
-<!-- iframe表示時の閉じるボタン -->
-<button id="closeFrameBtn" onclick="closeRouteFrame()"
-  style="display:none;position:fixed;z-index:7;
-         top:calc(68px + var(--safe-top));right:16px;
-         padding:8px 16px;background:rgba(26,38,52,.95);
-         border:1px solid var(--border);border-radius:8px;
-         color:var(--text);font-size:12px;font-weight:700;
-         font-family:'Noto Sans JP',sans-serif;cursor:pointer;
-         backdrop-filter:blur(10px);box-shadow:0 2px 12px rgba(0,0,0,.4);">
-  ✕ 地図を閉じる
-</button>
-
 <!-- Legend -->
 <div class="legend" id="legend">
   <div class="leg-i"><div class="leg-c" style="background:#42a5f5"></div>一般道</div>
@@ -1157,7 +1141,7 @@ function displayResults(res,bpm){
     const db=r.disc?.name?`<span class="disc-badge ${r.disc.cls||''}">${r.disc.name}</span>`:'';
     const opacity=within?'1':'0.82';
 
-    h+=`<div class="rc" style="opacity:${opacity};--rc-border:${borderCol}" onclick="showRoute(${i})" data-i="${i}">
+    h+=`<div class="rc r${i+1}" onclick="showRoute(${i})" data-i="${i}" title="タップでGoogle Mapsに経路を表示">
       <div style="position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px;background:${borderCol}"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-size:11px;font-weight:900;color:${within?RCOLORS[i]:'var(--orange)'}">所要時間 ${rkLabel}</span>
@@ -1213,58 +1197,42 @@ function displayResults(res,bpm){
   setStat(withinCount>0?'ok':'warn', msg);
   document.getElementById('legend').style.display='block';
 }
-// Google Maps Embed でルートをiframe表示
-function showRouteInEmbed(i) {
+// Google Maps でルートを新規タブ（スマホはアプリ）で開く
+function showRouteInMaps(i) {
   const rs = window._sr; if (!rs?.[i]) return;
   const r = rs[i];
-  const apiKey = document.getElementById('apiKey').value.trim();
   const route = r.dr.routes[r.ri||0];
-  const legs = route.legs;
+  const legs  = route.legs;
 
-  // 始点・終点・中間点を取得
-  const originLoc = legs[0].start_location;
-  const destLoc   = legs[legs.length-1].end_location;
-  const origin = `${originLoc.lat()},${originLoc.lng()}`;
-  const dest   = `${destLoc.lat()},${destLoc.lng()}`;
+  const origin = `${legs[0].start_location.lat()},${legs[0].start_location.lng()}`;
+  const dest   = `${legs[legs.length-1].end_location.lat()},${legs[legs.length-1].end_location.lng()}`;
 
-  // 中間地点（経由地）
-  let wpParam = '';
-  if (legs.length > 1) {
-    const midPoints = legs.slice(0,-1).map(l => `${l.end_location.lat()},${l.end_location.lng()}`);
-    if (midPoints.length) wpParam = `&waypoints=${midPoints.join('|')}`;
-  }
+  // 経由地（複数レグがある場合）
+  const wps = legs.length > 1
+    ? legs.slice(0,-1).map(l=>`${l.end_location.lat()},${l.end_location.lng()}`).join('|')
+    : '';
 
-  const url = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${dest}&mode=driving&language=ja${wpParam}&avoid=tolls`;
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=driving`;
+  if (wps) url += `&waypoints=${wps}`;
 
-  // iframeの位置をJSマップと同じに設定
-  const frame = document.getElementById('routeFrame');
-  const mapEl = document.getElementById('map');
-  const rect  = mapEl.getBoundingClientRect();
-  frame.style.left   = rect.left + 'px';
-  frame.style.top    = rect.top  + 'px';
-  frame.style.width  = rect.width  + 'px';
-  frame.style.height = rect.height + 'px';
-  frame.src = url;
-  frame.style.display = 'block';
-  document.getElementById('closeFrameBtn').style.display = 'block';
+  window.open(url, '_blank');
 }
 
 function closeRouteFrame() {
-  const frame = document.getElementById('routeFrame');
-  frame.style.display = 'none';
-  frame.src = 'about:blank';
-  document.getElementById('closeFrameBtn').style.display = 'none';
+  // 互換性のために残す（呼び出し元がある場合に備え）
 }
 
 function showRoute(i){
-  tollRenderers.forEach(r=>r.setMap(null));tollRenderers=[];
-  const rs=window._sr;if(!rs?.[i])return;
+  const rs=window._sr; if(!rs?.[i]) return;
+  // カードのハイライト
   document.querySelectorAll('.rc').forEach(c=>c.style.outline='');
   const sel=document.querySelector(`.rc[data-i="${i}"]`);
-  if(sel)sel.style.outline=`2px solid ${RCOLORS[i]||'var(--accent)'}`;
-  // Google Maps Embed でiframe表示
-  showRouteInEmbed(i);
-  if(isMobile()&&panelOpen)togglePanel();
+  if(sel) sel.style.outline=`2px solid ${RCOLORS[i]||'var(--accent)'}`;
+
+  // Google Maps を開く
+  showRouteInMaps(i);
+
+  if(isMobile()&&panelOpen) togglePanel();
 }
 function showGenRec(){
   document.getElementById('results').innerHTML=`<div class="gen-rec"><div class="ic">🚗</div><div class="mg">一般道のご利用をおすすめします</div><div class="sb">有料道路での時間短縮が見込めないか、予算内の候補がありません。<br>一般道: ${fmtD(genDurSec)} / ${fmtDist(genDistM)}</div></div>`;
