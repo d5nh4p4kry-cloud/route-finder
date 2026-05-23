@@ -359,6 +359,22 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   </div>
 </div>
 
+<!-- Google Maps Embed iframe（ルートカードクリック時に表示） -->
+<iframe id="routeFrame" src="about:blank" allowfullscreen loading="lazy"
+  style="display:none;position:fixed;border:0;z-index:6;"></iframe>
+
+<!-- iframe表示時の閉じるボタン -->
+<button id="closeFrameBtn" onclick="closeRouteFrame()"
+  style="display:none;position:fixed;z-index:7;
+         top:calc(68px + var(--safe-top));right:16px;
+         padding:8px 16px;background:rgba(26,38,52,.95);
+         border:1px solid var(--border);border-radius:8px;
+         color:var(--text);font-size:12px;font-weight:700;
+         font-family:'Noto Sans JP',sans-serif;cursor:pointer;
+         backdrop-filter:blur(10px);box-shadow:0 2px 12px rgba(0,0,0,.4);">
+  ✕ 地図を閉じる
+</button>
+
 <!-- Legend -->
 <div class="legend" id="legend">
   <div class="leg-i"><div class="leg-c" style="background:#42a5f5"></div>一般道</div>
@@ -496,6 +512,88 @@ let stops = [], stopIdCnt = 0;
 const MAX_STOPS = 7;
 let panelOpen = false;
 const isMobile = () => window.innerWidth < 768;
+
+// ══════════════════════════════════════════════════════════════
+// 日時自動設定（検索時に現在時刻から曜日種別・時間帯を判定）
+// ══════════════════════════════════════════════════════════════
+// フォールバック用ハードコード祝日（API取得失敗時に使用）
+const JP_HOL_FB = new Set([
+  '2024-01-01','2024-01-08','2024-02-11','2024-02-12','2024-02-23','2024-03-20',
+  '2024-04-29','2024-05-03','2024-05-04','2024-05-05','2024-05-06','2024-07-15',
+  '2024-08-11','2024-08-12','2024-09-16','2024-09-22','2024-09-23','2024-10-14',
+  '2024-11-03','2024-11-04','2024-11-23',
+  '2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20',
+  '2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21',
+  '2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24',
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29',
+  '2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11',
+  '2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23',
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-20','2027-04-29',
+  '2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11',
+  '2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23',
+]);
+let holidaySet = JP_HOL_FB; // 起動直後はフォールバックを使用
+
+// 祝日データをAPIから取得・キャッシュ（30日有効・自動更新）
+async function loadHolidays() {
+  try {
+    const cached = SS.get('jp_hol_v2');
+    if (cached) {
+      const {dates, ts} = JSON.parse(cached);
+      if (Date.now() - ts < 30*24*3600*1000) { holidaySet = new Set(dates); return; }
+    }
+  } catch(e) {}
+  // ① holidays-jp.github.io（Googleカレンダーベース・全年一括）
+  try {
+    const r = await fetch('https://holidays-jp.github.io/api/v1/date.json');
+    if (r.ok) {
+      const data = await r.json();
+      const dates = Object.keys(data);
+      if (dates.length > 0) {
+        holidaySet = new Set(dates);
+        SS.set('jp_hol_v2', JSON.stringify({dates, ts: Date.now()}));
+        return;
+      }
+    }
+  } catch(e) {}
+  // ② yamada-tools.jp（年ごと取得）
+  try {
+    const yr = new Date().getFullYear();
+    const allDates = [...JP_HOL_FB];
+    for (const y of [yr-1, yr, yr+1, yr+2]) {
+      const r = await fetch(`https://yamada-tools.jp/api/holidays/${y}`);
+      if (r.ok) { const d = await r.json(); (d.holidays||[]).forEach(h=>allDates.push(h.date)); }
+    }
+    if (allDates.length > JP_HOL_FB.size) {
+      holidaySet = new Set(allDates);
+      SS.set('jp_hol_v2', JSON.stringify({dates: allDates, ts: Date.now()}));
+    }
+  } catch(e) {}
+  // ③ フォールバック（ハードコードリスト）は既に初期値として設定済み
+}
+
+const PEAK_RANGES = [
+  {s:'04-29',e:'05-06'},{s:'08-13',e:'08-16'},
+  {s:'12-28',e:'12-31'},{s:'01-01',e:'01-03'},
+];
+function autoSetDateTime() {
+  const now  = new Date();
+  const h    = now.getHours();
+  const dow  = now.getDay();
+  const ds   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const mmdd = ds.slice(5);
+  const isHol  = dow===0||dow===6||holidaySet.has(ds);
+  const isPeak = isHol&&PEAK_RANGES.some(p=>p.s<=p.e?mmdd>=p.s&&mmdd<=p.e:mmdd>=p.s||mmdd<=p.e);
+  const dayType  = isPeak?'peak_holiday':isHol?'holiday':'weekday';
+  const timeSlot = h<4?'midnight':h<6?'early_morning':h<9?'morning_rush':
+                   h<17?'daytime':h<20?'evening_rush':h<22?'night':'late_night';
+  document.getElementById('dayType').value  = dayType;
+  document.getElementById('timeSlot').value = timeSlot;
+  const DL={weekday:'平日',holiday:'休日',peak_holiday:'繁忙期休日'};
+  const TL={midnight:'深夜0〜4時',early_morning:'早朝4〜6時',morning_rush:'朝6〜9時',
+            daytime:'昼間9〜17時',evening_rush:'夕方17〜20時',night:'夜間20〜22時',late_night:'深夜22〜0時'};
+  return `${DL[dayType]} / ${TL[timeSlot]}`;
+}
 
 // ══════════════════════════════════════════════════════════════
 // SAFE STORAGE（data:URL環境ではlocalStorageが使えないため安全にラップ）
@@ -701,6 +799,8 @@ function onMapsOK(){
   });
   renderStops();
   setStat('ok','API接続完了。出発地・目的地を入力してください。');
+  // 祝日データをバックグラウンドで取得・更新
+  loadHolidays().catch(()=>{});
   // Show save button if not yet saved
   const saved=SS.get('rf_api_key');
   const current=document.getElementById('apiKey').value.trim();
@@ -735,39 +835,65 @@ function getRoute(o,d,at,wps=[]){
 const TKWS=['高速','有料','Expwy','自動車道','首都高','東名','中央道','関越','東北道','常磐道','圏央道','外環','湾岸','アクアライン','名神','近畿','阪神高速','九州道','中国道'];
 function exRoads(route){const r=[],s=new Set();if(route.legs)route.legs.forEach(l=>l.steps.forEach(st=>{const inst=st.instructions||'';for(const k of TKWS){if(inst.includes(k)){const m=inst.match(/([\u4e00-\u9fff\u3040-\u30ffA-Za-z0-9ー]+(?:高速|自動車道|有料道路|Expwy))/);const n=m?m[1]:k;if(!s.has(n)){s.add(n);r.push(n)}break}}}));return r.length?r:['有料道路']}
 
-// IC・JCT情報をDirections APIのステップから抽出
-function extractICInfo(route) {
-  const info = { entry: null, exit: null, via: [] };
-  if (!route.legs) return info;
-  // 首都高は「出入口」形式、NEXCO系は「IC・インターチェンジ」形式
-  const IC_RE  = /([^\s　、。（）()「」【】\/<>]{2,20}?(?:インターチェンジ|IC(?![A-Za-z])|出入口|インター(?!ネット|フォン|バル|セクション|ナル|ポール|フェース)))/g;
-  const EXIT_RE = /([^\s　、。（）()「」【】\/<>]{2,12}(?:出口|入口))(?=[^0-9A-Za-z]|$)/g;
+// IC・JCT情報をDirections APIのステップから抽出（JCT用・同期）
+function extractJCTVia(route) {
   const JCT_RE = /([^\s　、。（）()「」【】\/<>]{2,20}?(?:JCT|ジャンクション))/g;
-  let seenICs = [], viaSet = new Set();
+  const viaSet = new Set();
+  if (!route.legs) return [];
   route.legs.forEach(leg => {
     (leg.steps || []).forEach(step => {
       const text = (step.instructions || '').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
       if (!TKWS.some(kw => text.includes(kw))) return;
-      for (const m of text.matchAll(IC_RE)) {
-        const n = m[1].trim();
-        if (n.length >= 3 && !seenICs.includes(n)) seenICs.push(n);
-      }
-      // 出口・入口（単独の「出口」「入口」は除外）
-      for (const m of text.matchAll(EXIT_RE)) {
-        const n = m[1].trim();
-        if (n.length >= 3 && n !== '出口' && n !== '入口' && !seenICs.includes(n)) seenICs.push(n);
-      }
       for (const m of text.matchAll(JCT_RE)) {
         const n = m[1].trim();
         if (n.length >= 3) viaSet.add(n);
       }
     });
   });
-  if (seenICs.length > 0) info.entry = seenICs[0];
-  if (seenICs.length > 1) info.exit  = seenICs[seenICs.length - 1];
-  else if (seenICs.length === 1) info.exit = seenICs[0];
-  info.via = [...viaSet].slice(0, 3);
-  return info;
+  return [...viaSet].slice(0, 3);
+}
+
+// ステップ座標からPlaces APIで最近傍のIC・出入口を検索（非同期）
+async function findNearestICName(location) {
+  const keywords = ['インターチェンジ', '出入口', 'IC 高速'];
+  const searches = await Promise.allSettled(
+    keywords.map(kw => new Promise(res => {
+      plcSvc.nearbySearch({location, radius:1800, keyword:kw, language:'ja'},
+        (r,s) => res(s==='OK' ? r||[] : []));
+    }))
+  );
+  const all = searches.flatMap(r => r.status==='fulfilled' ? r.value : []);
+  if (!all.length) return null;
+  // 距離が最も近いものを選択
+  let best = null, minD = Infinity;
+  for (const p of all) {
+    const d = google.maps.geometry
+      ? google.maps.geometry.spherical.computeDistanceBetween(location, p.geometry.location)
+      : haverD(location, p.geometry.location);
+    if (d < minD) { minD = d; best = p; }
+  }
+  return best?.name || null;
+}
+
+async function findICNames(route) {
+  const result = { entry: null, exit: null };
+  if (!route.legs) return result;
+  const allSteps = route.legs.flatMap(leg => leg.steps || []);
+  let firstToll = null, lastToll = null;
+  for (const step of allSteps) {
+    const text = (step.instructions||'').replace(/<[^>]+>/g,' ');
+    if (TKWS.some(kw => text.includes(kw))) {
+      if (!firstToll) firstToll = step;
+      lastToll = step;
+    }
+  }
+  const [entry, exit] = await Promise.all([
+    firstToll?.start_location ? findNearestICName(firstToll.start_location) : Promise.resolve(null),
+    lastToll?.end_location    ? findNearestICName(lastToll.end_location)    : Promise.resolve(null),
+  ]);
+  result.entry = entry;
+  result.exit  = exit;
+  return result;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -858,6 +984,7 @@ function toggleHist() {
 }
 
 async function startSearch(){
+  const timeInfo = autoSetDateTime(); // 現在時刻から曜日・時間帯を自動設定
   const o=getOrigin(),d=getDest();
   if(!o||!d){setStat('warn','出発地と目的地を入力してください。');return}
   clearRoutes();
@@ -878,6 +1005,7 @@ async function startSearch(){
     document.getElementById('genInfo').classList.add('on');
     // 履歴に保存
     saveHistory(stops[0].v||stops[0].inputEl?.value||'', stops[stops.length-1].v||stops[stops.length-1].inputEl?.value||'');
+    setStat('info',`走行条件を自動設定: ${timeInfo}`);
     setLM('有料道路ルートを確認中...');
     const tr=await getRoute(o,d,false,wps);
     const tDur=tr.routes[0].legs.reduce((s,l)=>s+l.duration.value,0);
@@ -922,7 +1050,7 @@ async function searchBudget(){
       const roads=exRoads(rt),ti=estToll(dist,genDistM,v,etc,day,ts,roads);
       const saved=genDurSec-dur,savedMin=saved/60;
       const cpm=savedMin>0?ti.final/savedMin:Infinity;
-      const icInfo=extractICInfo(rt);
+      const icInfo={ entry:null, exit:null, via:extractJCTVia(rt) };
       cands.push({type:'direct',ri:i,dr:tr,dur,dist,saved,savedMin:Math.round(savedMin*10)/10,roads,base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:rt.summary,eff:savedMin/Math.max(ti.final,1),icInfo});
     }
     setLM('IC検索中...');
@@ -950,9 +1078,20 @@ async function searchBudget(){
     }
     hideLoad();
     if(!cands.length){showGenRec();setStat('warn','有料道路で時間短縮できるルートが見つかりませんでした。一般道をご利用ください。');return}
-    // 所要時間が短い順にソートして上位5件を表示（予算超過分も含む）
     cands.sort((a,b)=>a.dur-b.dur);
-    displayResults(cands.slice(0,5),bpm);
+    const top5=cands.slice(0,5);
+    // Places APIで入口・出口IC名を並列取得
+    showLoad('入口・出口ICを検索中...');
+    await Promise.all(top5.map(async c=>{
+      try{
+        const route=c.dr.routes[c.ri||0];
+        const names=await findICNames(route);
+        if(names.entry) c.icInfo.entry=names.entry;
+        if(names.exit)  c.icInfo.exit =names.exit;
+      }catch(e){}
+    }));
+    hideLoad();
+    displayResults(top5,bpm);
   }catch(e){hideLoad();setStat('err',`エラー: ${e.message}`)}
 }
 
@@ -1031,16 +1170,13 @@ function displayResults(res,bpm){
       </div>
       ${(()=>{
         const ic=r.icInfo||{};
-        const hasIC=ic.entry||ic.exit||ic.via?.length>0;
-        if(!hasIC)return '';
-        const viaStr=ic.via&&ic.via.length>0?` → <span style="color:var(--text-dim)">${ic.via.join(' → ')}</span> → `:'→';
-        return `<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:7px;font-size:11px;line-height:1.8">
-          <div><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">入口IC</span><br>
-            <strong style="color:var(--blue)">🔵 ${ic.entry||'不明'}</strong></div>
-          ${ic.via&&ic.via.length>0?`<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">主な経由地</span><br>
-            <span style="color:var(--text-dim)">⬇ ${ic.via.join(' → ')}</span></div>`:''}
-          <div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">出口IC</span><br>
-            <strong style="color:var(--red)">🔴 ${ic.exit||'不明'}</strong></div>
+        const hasVia=ic.via&&ic.via.length>0;
+        const hasAny=ic.entry||ic.exit||hasVia;
+        if(!hasAny)return '';
+        return `<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:7px;font-size:11px;line-height:1.9">
+          ${ic.entry?`<div><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">入口IC / 出入口</span><br><strong style="color:var(--blue)">🔵 ${ic.entry}</strong></div>`:''}
+          ${hasVia?`<div style="margin-top:${ic.entry?'4px':'0'}"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">主な経由地</span><br><span style="color:var(--text-dim)">⬇ ${ic.via.join(' → ')}</span></div>`:''}
+          ${ic.exit?`<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px;text-transform:uppercase">出口IC / 出入口</span><br><strong style="color:var(--red)">🔴 ${ic.exit}</strong></div>`:''}
         </div>`;
       })()}
     </div>`;
@@ -1066,18 +1202,57 @@ function displayResults(res,bpm){
   setStat(withinCount>0?'ok':'warn', msg);
   document.getElementById('legend').style.display='block';
 }
+// Google Maps Embed でルートをiframe表示
+function showRouteInEmbed(i) {
+  const rs = window._sr; if (!rs?.[i]) return;
+  const r = rs[i];
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const route = r.dr.routes[r.ri||0];
+  const legs = route.legs;
+
+  // 始点・終点・中間点を取得
+  const originLoc = legs[0].start_location;
+  const destLoc   = legs[legs.length-1].end_location;
+  const origin = `${originLoc.lat()},${originLoc.lng()}`;
+  const dest   = `${destLoc.lat()},${destLoc.lng()}`;
+
+  // 中間地点（経由地）
+  let wpParam = '';
+  if (legs.length > 1) {
+    const midPoints = legs.slice(0,-1).map(l => `${l.end_location.lat()},${l.end_location.lng()}`);
+    if (midPoints.length) wpParam = `&waypoints=${midPoints.join('|')}`;
+  }
+
+  const url = `https://www.google.com/maps/embed/v1/directions?key=${apiKey}&origin=${origin}&destination=${dest}&mode=driving&language=ja${wpParam}&avoid=tolls`;
+
+  // iframeの位置をJSマップと同じに設定
+  const frame = document.getElementById('routeFrame');
+  const mapEl = document.getElementById('map');
+  const rect  = mapEl.getBoundingClientRect();
+  frame.style.left   = rect.left + 'px';
+  frame.style.top    = rect.top  + 'px';
+  frame.style.width  = rect.width  + 'px';
+  frame.style.height = rect.height + 'px';
+  frame.src = url;
+  frame.style.display = 'block';
+  document.getElementById('closeFrameBtn').style.display = 'block';
+}
+
+function closeRouteFrame() {
+  const frame = document.getElementById('routeFrame');
+  frame.style.display = 'none';
+  frame.src = 'about:blank';
+  document.getElementById('closeFrameBtn').style.display = 'none';
+}
+
 function showRoute(i){
   tollRenderers.forEach(r=>r.setMap(null));tollRenderers=[];
   const rs=window._sr;if(!rs?.[i])return;
   document.querySelectorAll('.rc').forEach(c=>c.style.outline='');
   const sel=document.querySelector(`.rc[data-i="${i}"]`);
   if(sel)sel.style.outline=`2px solid ${RCOLORS[i]||'var(--accent)'}`;
-  const r=rs[i];
-  const col=r.cpm<=parseInt(document.getElementById('budgetIn').value||'0')?RCOLORS[i]:'#ff9800';
-  tollRenderers.push(new google.maps.DirectionsRenderer({map,directions:r.dr,routeIndex:r.ri||0,polylineOptions:{strokeColor:col,strokeWeight:6,strokeOpacity:.85,zIndex:10},suppressMarkers:true}));
-  const bounds=new google.maps.LatLngBounds();
-  r.dr.routes[r.ri||0].legs.forEach(l=>{bounds.extend(l.start_location);bounds.extend(l.end_location)});
-  map.fitBounds(bounds,{top:60,right:20,bottom:60,left:20});
+  // Google Maps Embed でiframe表示
+  showRouteInEmbed(i);
   if(isMobile()&&panelOpen)togglePanel();
 }
 function showGenRec(){
