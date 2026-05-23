@@ -327,8 +327,6 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 </head>
 <body>
 
-<!-- デバッグパネル（問題特定後に削除） -->
-<div id="dbg" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a0a0a;border-bottom:2px solid #ef5350;padding:10px 14px;font-family:monospace;font-size:12px;color:#ff8a80;max-height:40vh;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
 
 <!-- Header -->
 <header class="header">
@@ -485,177 +483,6 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 
 <script>
 // ══════════════════════════════════════════════════════════════
-// DEBUG (iPhone用 画面内エラー表示)
-// ══════════════════════════════════════════════════════════════
-const dbgEl = document.getElementById('dbg');
-function dbg(msg, color) {
-  dbgEl.style.display = 'block';
-  const line = document.createElement('div');
-  line.style.color = color || '#ff8a80';
-  line.style.borderBottom = '1px solid #3a1a1a';
-  line.style.padding = '3px 0';
-  line.textContent = `[${new Date().toLocaleTimeString('ja')}] ${msg}`;
-  dbgEl.appendChild(line);
-  dbgEl.scrollTop = dbgEl.scrollHeight;
-}
-// 未キャッチエラーをすべて表示
-window.addEventListener('error', e => dbg(`❌ ${e.message} (${e.filename?.split('/').pop()}:${e.lineno})`, '#ff5252'));
-window.addEventListener('unhandledrejection', e => dbg(`❌ Promise: ${e.reason}`, '#ff5252'));
-
-// connectMap をラップしてデバッグログ追加
-const _origConnect = window.connectMap;
-
-// ══════════════════════════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════════════════════════
-let map, dirSvc, plcSvc;
-let genRenderer = null, tollRenderers = [];
-let genResult = null, genDurSec = 0, genDistM = 0;
-const RCOLORS = ['#ffd700','#c0c0c0','#cd7f32','#42a5f5','#ab47bc'];
-let stops = [], stopIdCnt = 0;
-const MAX_STOPS = 7;
-let panelOpen = false;
-const isMobile = () => window.innerWidth < 768;
-
-// ══════════════════════════════════════════════════════════════
-// SAFE STORAGE（data:URL環境ではlocalStorageが使えないため安全にラップ）
-// ══════════════════════════════════════════════════════════════
-const SS = {
-  get(k)    { try { return localStorage.getItem(k); }    catch(e) { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); return true; } catch(e) { return false; } },
-  del(k)    { try { localStorage.removeItem(k); return true; } catch(e) { return false; } }
-};
-// data:URL上では保存不可フラグ
-const CAN_STORE = SS.set('_test', '1');
-SS.del('_test');
-
-// ══════════════════════════════════════════════════════════════
-// API KEY MANAGEMENT
-// ══════════════════════════════════════════════════════════════
-function loadSavedKey() {
-  const k = SS.get('rf_api_key');
-  if (k) {
-    document.getElementById('apiKey').value = k;
-    document.getElementById('savedBadge').style.display = 'inline';
-    document.getElementById('clearBtn').style.display = 'inline';
-  }
-  if (!CAN_STORE) {
-    // 保存不可環境では保存ボタンを非表示
-    document.getElementById('saveBtn').style.display = 'none';
-  }
-}
-function saveKey() {
-  const k = document.getElementById('apiKey').value.trim();
-  if (!k) { alert('先にAPIキーを入力してください'); return; }
-  if (!CAN_STORE) { setStat('warn', 'この環境ではAPIキーの保存ができません（data:URL制限）。毎回入力してください。'); return; }
-  SS.set('rf_api_key', k);
-  document.getElementById('savedBadge').style.display = 'inline';
-  document.getElementById('saveBtn').style.display = 'none';
-  document.getElementById('clearBtn').style.display = 'inline';
-  setStat('ok', 'APIキーを保存しました。次回から自動で読み込みます。');
-}
-function clearKey() {
-  if (!confirm('保存したAPIキーを削除しますか？')) return;
-  SS.del('rf_api_key');
-  document.getElementById('apiKey').value = '';
-  document.getElementById('savedBadge').style.display = 'none';
-  document.getElementById('saveBtn').style.display = 'none';
-  document.getElementById('clearBtn').style.display = 'none';
-}
-document.getElementById('apiKey').addEventListener('input', () => {
-  const hasVal = document.getElementById('apiKey').value.trim().length > 0;
-  document.getElementById('saveBtn').style.display = hasVal ? 'inline' : 'none';
-  document.getElementById('savedBadge').style.display = 'none';
-});
-
-// ══════════════════════════════════════════════════════════════
-// PANEL TOGGLE (mobile)
-// ══════════════════════════════════════════════════════════════
-function togglePanel() {
-  panelOpen = !panelOpen;
-  const panel = document.getElementById('panel');
-  const fab = document.getElementById('panelFab');
-  if (isMobile()) {
-    panel.classList.toggle('open', panelOpen);
-    fab.textContent = panelOpen ? '✕' : '☰';
-    fab.classList.toggle('open', panelOpen);
-  }
-}
-// Close panel on map tap (mobile)
-document.getElementById('map').addEventListener('click', () => {
-  if (isMobile() && panelOpen) togglePanel();
-});
-
-// ══════════════════════════════════════════════════════════════
-// TOLL RATES
-// ══════════════════════════════════════════════════════════════
-const TOLL = {
-  nexco:{normal:24.6,metro:29.52,terminal:150,tax:1.1,
-    ratio:{light:.8,standard:1,medium:1.2},
-    red(d){return d<=100?d:d<=200?100+(d-100)*.75:175+(d-200)*.70}},
-  shuto:{perKm:{light:23.616,standard:29.52,medium:35.424},terminal:150,tax:1.1,
-    min:{light:240,standard:300,medium:360},max:{light:1560,standard:1950,medium:2340}},
-  hanshin:{perKm:{light:23.616,standard:29.52,medium:35.424},terminal:150,tax:1.1,
-    min:{light:240,standard:300,medium:360},max:{light:1560,standard:1950,medium:2340}}
-};
-const DISC={n:.30,h:.30,c:.30,sn:.20,hn:.20};
-
-function cNexco(km,v,m){const r=m?TOLL.nexco.metro:TOLL.nexco.normal;return Math.round((TOLL.nexco.red(km)*r*TOLL.nexco.ratio[v]+TOLL.nexco.terminal)*TOLL.nexco.tax/10)*10}
-function cShuto(km,v,e){if(!e)return TOLL.shuto.max[v];const r=Math.round((km*TOLL.shuto.perKm[v]+TOLL.shuto.terminal)*TOLL.shuto.tax/10)*10;return Math.max(TOLL.shuto.min[v],Math.min(TOLL.shuto.max[v],r))}
-function cHanshin(km,v,e){if(!e)return TOLL.hanshin.max[v];const r=Math.round((km*TOLL.hanshin.perKm[v]+TOLL.hanshin.terminal)*TOLL.hanshin.tax/10)*10;return Math.max(TOLL.hanshin.min[v],Math.min(TOLL.hanshin.max[v],r))}
-
-function getDisc(rt,day,ts,etc){
-  if(!etc)return{rate:0,name:null};
-  if(rt==='shuto')return ts==='midnight'?{rate:DISC.sn,name:'首都高深夜割引20%',cls:'night'}:{rate:0,name:null};
-  if(rt==='hanshin')return ts==='midnight'?{rate:DISC.hn,name:'阪神高速深夜割引20%',cls:'night'}:{rate:0,name:null};
-  if(ts==='midnight')return{rate:DISC.n,name:'深夜割引30%',cls:'night'};
-  if(day==='holiday')return{rate:DISC.h,name:'休日割引30%',cls:'holiday'};
-  if(day==='weekday'&&(ts==='morning_rush'||ts==='evening_rush'))return{rate:DISC.c,name:'平日朝夕割引~30%',cls:'commute'};
-  return{rate:0,name:null};
-}
-
-function estToll(totalM,genM,v,etc,day,ts,roads){
-  const isS=roads.some(r=>/首都高|C1|C2|都心環状|湾岸線|中央環状/.test(r));
-  const isH=roads.some(r=>/阪神高速|阪神/.test(r));
-  let km=totalM<genM?totalM*.4/1000:Math.max(5,(totalM-genM*.6))/1000;
-  km=Math.max(3,Math.min(km,totalM/1000*.8));
-  const metro=isS||isH||roads.some(r=>/東名|中央道|関越|東北道|常磐道|外環|圏央道/.test(r));
-  let base,rt='nexco';
-  if(isS){rt='shuto';base=cShuto(km,v,etc)}
-  else if(isH){rt='hanshin';base=cHanshin(km,v,etc)}
-  else base=cNexco(km,v,metro);
-  const d=getDisc(rt,day,ts,etc);
-  return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base,km:Math.round(km*10)/10,rt};
-}
-function estDirect(distM,v,etc,day,ts,name){
-  const km=distM/1000;
-  const isS=/首都高|C1|C2/.test(name||''),isH=/阪神/.test(name||'');
-  let base,rt='nexco';
-  if(isS){rt='shuto';base=cShuto(km,v,etc)}
-  else if(isH){rt='hanshin';base=cHanshin(km,v,etc)}
-  else base=cNexco(km,v,km<40);
-  const d=getDisc(rt,day,ts,etc);
-  return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base,km:Math.round(km*10)/10,rt};
-}
-
-// ══════════════════════════════════════════════════════════════
-// STOP LIST UI
-// ══════════════════════════════════════════════════════════════
-function initStops(){
-  stops=[{id:++stopIdCnt,v:'',place:null,ac:null},{id:++stopIdCnt,v:'',place:null,ac:null}];
-  renderStops();
-}
-function renderStops(){
-  const list=document.getElementById('stopList');
-  list.innerHTML='';
-  stops.forEach((s,i)=>{
-    const isO=i===0,isD=i===stops.length-1;
-    const dc=isO?'origin':isD?'dest':'waypoint';
-    const ph=isO?'🔵 出発地':isD?'🔴 目的地':`🟠 経由地 ${i}`;
-    const row=document.createElement('div');
-    row.className='stop-row';
-    row.innerHTML=`
-      <div class="stop-dot ${dc}"></div>
       <input class="stop-input" id="si_${s.id}" placeholder="${ph}" ${map?'':'disabled'} value="${s.v||''}" />
       <div class="stop-btns">
         ${!isO&&!isD?`<button class="stop-btn del" onclick="removeStop(${i})" title="削除">✕</button>`:''}
@@ -689,26 +516,16 @@ function getWPs(){return stops.slice(1,-1).map(s=>({location:s.place?.geometry?s
 // ══════════════════════════════════════════════════════════════
 function connectMap(){
   const key=document.getElementById('apiKey').value.trim();
-  dbg(`🔑 接続開始 key=${key?key.slice(0,8)+'…':'(空)'}`);
   if(!key){alert('APIキーを入力してください');return}
   const s=document.createElement('script');
-  const src=`https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP`;
-  dbg(`📡 script追加中…`);
-  s.src=src;
+  s.src=`https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP`;
   s.async=true;
-  s.onload=()=>dbg('✅ Google Maps script読み込み完了', '#69f0ae');
-  s.onerror=(e)=>{
-    dbg(`❌ script読み込み失敗: ${JSON.stringify(e)}`, '#ff5252');
-    alert('API読み込み失敗。キーを確認してください。');
-  };
+  s.onerror=()=>alert('API読み込み失敗。キーを確認してください。');
   document.head.appendChild(s);
-  dbg('📌 script要素をheadに追加しました');
 }
 function onMapsOK(){
-  dbg('✅ onMapsOK() 呼び出し成功', '#69f0ae');
   try {
   document.getElementById('initScr').style.display='none';
-  dbg('🗺 Map初期化開始…');
   map=new google.maps.Map(document.getElementById('map'),{
     center:{lat:35.68,lng:139.76},zoom:10,
     styles:[
@@ -731,19 +548,19 @@ function onMapsOK(){
   });
   renderStops();
   setStat('ok','API接続完了。出発地・目的地を入力してください。');
-  dbg('✅ 初期化完了', '#69f0ae');
   // Show save button if not yet saved
-  const saved=localStorage.getItem('rf_api_key');
+  const saved=SS.get('rf_api_key');
   const current=document.getElementById('apiKey').value.trim();
   if(!saved||saved!==current){
-    document.getElementById('saveBtn').style.display='inline';
+    document.getElementById('saveBtn').style.display = CAN_STORE ? 'inline' : 'none';
     document.getElementById('savedBadge').style.display='none';
   }
-  // Open panel on mobile
-  if(isMobile()&&!panelOpen)togglePanel();
   } catch(err) {
-    dbg(`❌ onMapsOK内エラー: ${err.message}`, '#ff5252');
   }
+  // try-catch外でパネルを開く（エラーが出ても必ず実行）
+  if(isMobile()&&!panelOpen) togglePanel();
+  // 地図タイルを強制再描画
+  setTimeout(()=>{ if(map){ google.maps.event.trigger(map,'resize'); map.setCenter({lat:35.68,lng:139.76}); } }, 300);
 }
 
 // ══════════════════════════════════════════════════════════════
