@@ -20,10 +20,16 @@
 html, body { height:100%; overflow:hidden; background:var(--bg); }
 body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 
-/* ── Map (always full screen behind) ── */
-#map { position:fixed; inset:0; z-index:0; }
+/* ── Map ── */
+#map {
+  position:fixed;
+  top:calc(56px + var(--safe-top));
+  left:0; right:0; bottom:0;
+  z-index:0;
+  background:#e8f0e8;
+}
 #initScr {
-  position:fixed; inset:0; z-index:1;
+  position:absolute; inset:0; z-index:1;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   background:var(--bg); gap:16px; padding:32px; text-align:center;
 }
@@ -111,8 +117,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 /* Mobile */
 @media (max-width: 767px) {
   .panel {
-    left:0; right:0;
-    bottom:0;
+    left:0; right:0; bottom:0;
     height:80vh;
     border-top:1px solid var(--border);
     border-radius:20px 20px 0 0;
@@ -120,11 +125,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   }
   .panel.open { transform:translateY(0); }
   .panel-inner { padding-bottom:calc(32px + var(--safe-bottom)); }
-  .sheet-handle {
-    width:40px; height:4px; background:var(--border);
-    border-radius:2px; margin:12px auto 4px;
-  }
-  #map { top:calc(56px + var(--safe-top)); }
+  .sheet-handle { width:40px; height:4px; background:var(--border); border-radius:2px; margin:12px auto 4px; }
   .legend { bottom:calc(80px + var(--safe-bottom)); left:16px; }
 }
 
@@ -795,8 +796,10 @@ function onMapsOK(){
   }
   // try-catch外でパネルを開く（エラーが出ても必ず実行）
   if(isMobile()&&!panelOpen) togglePanel();
-  // 地図タイルを強制再描画
-  setTimeout(()=>{ if(map){ google.maps.event.trigger(map,'resize'); map.setCenter({lat:35.68,lng:139.76}); } }, 300);
+  // マップコンテナ確定後にリサイズを複数回強制してタイルを確実に読み込む
+  [100, 300, 700].forEach(ms => setTimeout(() => {
+    if(map){ google.maps.event.trigger(map,'resize'); map.setCenter({lat:35.68,lng:139.76}); }
+  }, ms));
 }
 
 // ══════════════════════════════════════════════════════════════
