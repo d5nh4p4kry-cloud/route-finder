@@ -327,10 +327,6 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 </head>
 <body>
 
-<!-- デバッグパネル（問題特定後に削除） -->
-<div id="dbg" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#1a0a0a;border-bottom:2px solid #ef5350;padding:10px 14px;font-family:monospace;font-size:12px;color:#ff8a80;max-height:40vh;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
-
-<!-- Header -->
 <header class="header">
   <div class="header-left">
     <div class="logo">R</div>
@@ -484,23 +480,6 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 </div>
 
 <script>
-// ══════════════════════════════════════════════════════════════
-// DEBUG (iPhone用 画面内エラー表示)
-// ══════════════════════════════════════════════════════════════
-const dbgEl = document.getElementById('dbg');
-function dbg(msg, color) {
-  dbgEl.style.display = 'block';
-  const line = document.createElement('div');
-  line.style.color = color || '#ff8a80';
-  line.style.borderBottom = '1px solid #3a1a1a';
-  line.style.padding = '3px 0';
-  line.textContent = `[${new Date().toLocaleTimeString('ja')}] ${msg}`;
-  dbgEl.appendChild(line);
-  dbgEl.scrollTop = dbgEl.scrollHeight;
-}
-// 未キャッチエラーをすべて表示
-window.addEventListener('error', e => dbg(`❌ ${e.message} (${e.filename?.split('/').pop()}:${e.lineno})`, '#ff5252'));
-window.addEventListener('unhandledrejection', e => dbg(`❌ Promise: ${e.reason}`, '#ff5252'));
 
 // connectMap をラップしてデバッグログ追加
 const _origConnect = window.connectMap;
@@ -689,26 +668,16 @@ function getWPs(){return stops.slice(1,-1).map(s=>({location:s.place?.geometry?s
 // ══════════════════════════════════════════════════════════════
 function connectMap(){
   const key=document.getElementById('apiKey').value.trim();
-  dbg(`🔑 接続開始 key=${key?key.slice(0,8)+'…':'(空)'}`);
   if(!key){alert('APIキーを入力してください');return}
   const s=document.createElement('script');
-  const src=`https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP`;
-  dbg(`📡 script追加中…`);
-  s.src=src;
+  s.src='https://maps.googleapis.com/maps/api/js?key='+key+'&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP';
   s.async=true;
-  s.onload=()=>dbg('✅ Google Maps script読み込み完了', '#69f0ae');
-  s.onerror=(e)=>{
-    dbg(`❌ script読み込み失敗: ${JSON.stringify(e)}`, '#ff5252');
-    alert('API読み込み失敗。キーを確認してください。');
-  };
+  s.onerror=function(){alert('API読み込み失敗。キーを確認してください。');};
   document.head.appendChild(s);
-  dbg('📌 script要素をheadに追加しました');
 }
 function onMapsOK(){
-  dbg('✅ onMapsOK() 呼び出し成功', '#69f0ae');
   try {
   document.getElementById('initScr').style.display='none';
-  dbg('🗺 Map初期化開始…');
   map=new google.maps.Map(document.getElementById('map'),{
     center:{lat:35.68,lng:139.76},zoom:10,
     styles:[
@@ -731,7 +700,6 @@ function onMapsOK(){
   });
   renderStops();
   setStat('ok','API接続完了。出発地・目的地を入力してください。');
-  dbg('✅ 初期化完了', '#69f0ae');
   // Show save button if not yet saved
   const saved=SS.get('rf_api_key');
   const current=document.getElementById('apiKey').value.trim();
@@ -740,7 +708,6 @@ function onMapsOK(){
     document.getElementById('savedBadge').style.display='none';
   }
   } catch(err) {
-    dbg(`❌ onMapsOK内エラー: ${err.message}`, '#ff5252');
   }
   // try-catch外でパネルを開く（エラーが出ても必ず実行）
   if(isMobile()&&!panelOpen) togglePanel();
@@ -881,7 +848,6 @@ function toggleHist() {
   header.classList.toggle('open', open);
   arrow.style.transform = open ? 'rotate(180deg)' : '';
 }
-
 
 async function startSearch(){
   const o=getOrigin(),d=getDest();
