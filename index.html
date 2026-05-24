@@ -258,11 +258,11 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 .rc { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:10px; position:relative; overflow:hidden; cursor:pointer; transition:all .2s; }
 .rc::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; border-radius:4px 0 0 4px; }
 .rc.r1::before { background:linear-gradient(180deg,#ffd700,#ff8c00); }
-.rc.r2::before { background:linear-gradient(180deg,#c0c0c0,#808080); }
+.rc.r2::before { background:linear-gradient(180deg,#ff6d00,#cc5800); }
 .rc.r3::before { background:linear-gradient(180deg,#cd7f32,#8b4513); }
 .rc:active { opacity:.85; }
 .rc-rank { font-size:10px; font-weight:900; letter-spacing:1.5px; margin-bottom:6px; }
-.r1 .rc-rank { color:#ffd700; } .r2 .rc-rank { color:#c0c0c0; } .r3 .rc-rank { color:#cd7f32; }
+.r1 .rc-rank { color:#ffd700; } .r2 .rc-rank { color:#ff6d00; } .r3 .rc-rank { color:#cd7f32; }
 .rc-route { font-size:13px; font-weight:500; margin-bottom:6px; line-height:1.5; }
 .rc-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .rc-d .l { font-size:9px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; }
@@ -367,7 +367,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 <div class="legend" id="legend">
   <div class="leg-i"><div class="leg-c" style="background:#42a5f5"></div>一般道</div>
   <div class="leg-i"><div class="leg-c" style="background:#ffd700"></div>推奨(1位)</div>
-  <div class="leg-i"><div class="leg-c" style="background:#c0c0c0"></div>候補(2位)</div>
+  <div class="leg-i"><div class="leg-c" style="background:#ff6d00"></div>候補(2位)</div>
   <div class="leg-i"><div class="leg-c" style="background:#cd7f32"></div>候補(3位)</div>
 </div>
 
@@ -836,37 +836,25 @@ function extractJCTVia(route) {
 }
 
 // ステップ座標からPlaces APIで最近傍のIC・出入口を検索（非同期）
-async function findNearestICName(location) {
-  const IC_VALID = /インターチェンジ|出入口|ランプ|IC|ＩＣ|JCT|ジャンクション|料金所/i;
-
-  const searches = await Promise.allSettled([
-    new Promise(res => plcSvc.nearbySearch(
-      {location, radius:3000, keyword:'インターチェンジ', language:'ja'},
-      (r,s) => res(s==='OK' ? r||[] : []))),
-    new Promise(res => plcSvc.nearbySearch(
-      {location, radius:3000, keyword:'出入口', language:'ja'},
-      (r,s) => res(s==='OK' ? r||[] : []))),
-    new Promise(res => plcSvc.nearbySearch(
-      {location, radius:3000, keyword:'高速 入口', language:'ja'},
-      (r,s) => res(s==='OK' ? r||[] : []))),
-  ]);
-
-  // 取得結果をフラット化し、IC関連ワードを含む名前だけに絞る
-  const valid = searches
-    .flatMap(r => r.status==='fulfilled' ? r.value : [])
-    .filter(p => IC_VALID.test(p.name));
-
-  if (!valid.length) return null;
-
-  // 最も近いものを選択
-  let best = null, minD = Infinity;
-  for (const p of valid) {
-    const d = google.maps.geometry
-      ? google.maps.geometry.spherical.computeDistanceBetween(location, p.geometry.location)
-      : haverD(location, p.geometry.location);
-    if (d < minD) { minD = d; best = p; }
+const IC_DB_RAW=`東京IC|35.632|139.644|東名高速\n東名川崎IC|35.582|139.580|東名高速\n横浜青葉IC|35.546|139.518|東名高速\n横浜町田IC|35.516|139.467|東名高速\n海老名JCT|35.448|139.391|東名高速\n厚木IC|35.446|139.366|東名高速\n伊勢原JCT|35.407|139.307|東名高速\n秦野中井IC|35.344|139.224|東名高速\n大井松田IC|35.335|139.170|東名高速\n御殿場JCT|35.303|138.935|東名高速\n御殿場IC|35.300|138.928|東名高速\n裾野IC|35.186|138.918|東名高速\n沼津IC|35.118|138.867|東名高速\n富士IC|35.164|138.697|東名高速\n清水JCT|35.017|138.501|東名高速\n静岡IC|34.982|138.381|東名高速\n海老名南JCT|35.439|139.396|新東名高速\n伊勢原大山IC|35.399|139.291|新東名高速\n秦野丹沢IC|35.365|139.196|新東名高速\n新秦野IC|35.340|139.138|新東名高速\n新御殿場IC|35.298|138.930|新東名高速\n長泉沼津IC|35.137|138.875|新東名高速\n新富士IC|35.174|138.670|新東名高速\n新清水JCT|35.043|138.445|新東名高速\n高井戸IC|35.681|139.614|中央道\n調布IC|35.656|139.556|中央道\n稲城IC|35.632|139.505|中央道\n府中SIC|35.644|139.470|中央道\n国立府中IC|35.660|139.440|中央道\n八王子IC|35.657|139.348|中央道\n八王子JCT|35.650|139.313|中央道\n相模湖IC|35.610|139.196|中央道\n上野原IC|35.619|139.120|中央道\n大月JCT|35.614|138.936|中央道\n河口湖IC|35.495|138.790|中央道\n甲府昭和IC|35.649|138.556|中央道\n練馬IC|35.764|139.614|関越道\n所沢IC|35.786|139.483|関越道\n川越IC|35.872|139.471|関越道\n鶴ヶ島JCT|35.930|139.404|関越道\n東松山IC|36.010|139.371|関越道\n嵐山小川IC|36.054|139.297|関越道\n花園IC|36.097|139.204|関越道\n本庄児玉IC|36.205|139.148|関越道\n藤岡JCT|36.242|139.077|関越道\n高崎IC|36.331|139.037|関越道\n川口JCT|35.848|139.724|東北道\n浦和IC|35.864|139.698|東北道\n岩槻IC|35.916|139.706|東北道\n久喜IC|36.049|139.652|東北道\n加須IC|36.118|139.578|東北道\n羽生IC|36.168|139.548|東北道\n館林IC|36.260|139.532|東北道\n佐野藤岡IC|36.322|139.592|東北道\n三郷JCT|35.835|139.879|常磐道\n三郷IC|35.832|139.862|常磐道\n流山IC|35.862|139.914|常磐道\n柏IC|35.882|139.960|常磐道\n守谷SA/SIC|35.971|140.000|常磐道\n谷和原IC|35.997|140.003|常磐道\nつくばJCT|36.037|140.042|常磐道\n桜土浦IC|36.054|140.110|常磐道\n茅ヶ崎JCT|35.357|139.397|圏央道\n寒川北IC|35.382|139.393|圏央道\n海老名IC|35.427|139.393|圏央道\n相模原愛川IC|35.502|139.338|圏央道\n高尾山IC|35.633|139.270|圏央道\nあきる野IC|35.724|139.272|圏央道\n日の出IC|35.748|139.270|圏央道\n青梅IC|35.780|139.260|圏央道\n入間IC|35.818|139.352|圏央道\n狭山日高IC|35.844|139.385|圏央道\n圏央鶴ヶ島IC|35.938|139.389|圏央道\n川島IC|35.975|139.434|圏央道\n桶川北本IC|36.020|139.502|圏央道\n白岡菖蒲IC|36.040|139.584|圏央道\n久喜白岡JCT|36.052|139.643|圏央道\n五霞IC|36.095|139.778|圏央道\n境古河IC|36.131|139.825|圏央道\nつくば中央IC|36.037|140.050|圏央道\n大泉JCT|35.770|139.593|外環道\n和光IC|35.783|139.618|外環道\n新倉PA|35.794|139.628|外環道\n戸田西IC|35.807|139.650|外環道\n美女木JCT|35.808|139.666|外環道\n外環浦和IC|35.838|139.685|外環道\n川口西IC|35.830|139.710|外環道\n川口JCT|35.848|139.724|外環道\n草加IC|35.840|139.773|外環道\n三郷南IC|35.821|139.849|外環道\n三郷JCT|35.835|139.879|外環道\n玉川IC|35.607|139.638|第三京浜\n川崎IC|35.577|139.604|第三京浜\n都筑IC|35.549|139.573|第三京浜\n港北IC|35.524|139.564|第三京浜\n保土ヶ谷IC|35.459|139.587|第三京浜\n狩場IC|35.420|139.612|横横道路\n日野IC|35.390|139.580|横横道路\n港南台IC|35.370|139.570|横横道路\n朝比奈IC|35.339|139.596|横横道路\n逗子IC|35.305|139.592|横横道路\n横須賀IC|35.267|139.625|横横道路\n衣笠IC|35.260|139.660|横横道路\n佐原IC|35.248|139.685|横横道路\n厚木西IC|35.438|139.347|小田厚\n平塚IC|35.360|139.327|小田厚\n大磯IC|35.328|139.308|小田厚\n二宮IC|35.308|139.278|小田厚\n小田原東IC|35.273|139.193|小田厚\n小田原西IC|35.259|139.160|小田厚\n浮島JCT|35.509|139.789|アクアライン\n木更津金田IC|35.393|139.912|アクアライン\n袖ヶ浦IC|35.392|139.949|アクアライン\n篠崎IC|35.706|139.913|京葉道路\n船橋IC|35.710|139.977|京葉道路\n幕張IC|35.647|140.029|東関東道\n宮野木JCT|35.649|140.072|東関東道\n千葉北IC|35.659|140.104|東関東道\n四街道IC|35.664|140.153|東関東道\n佐倉IC|35.704|140.186|東関東道\n成田IC|35.785|140.335|東関東道\n永福出入口|35.672|139.639|首都高4号\n幡ヶ谷出入口|35.674|139.677|首都高4号\n新宿出入口|35.685|139.696|首都高4号\n外苑出入口|35.674|139.715|首都高4号\n三宅坂JCT|35.682|139.743|首都高4号\n用賀出入口|35.627|139.634|首都高3号\n三軒茶屋出入口|35.638|139.668|首都高3号\n池尻出入口|35.651|139.675|首都高3号\n大橋JCT|35.651|139.685|首都高3号\n谷町JCT|35.668|139.727|首都高3号\n高樹町出入口|35.660|139.719|首都高3号\n渋谷出入口|35.655|139.702|首都高3号\n霞が関出入口|35.673|139.748|首都高都心環状\n代官町出入口|35.689|139.752|首都高都心環状\n神田橋出入口|35.691|139.765|首都高都心環状\n江戸橋JCT|35.684|139.778|首都高都心環状\n箱崎JCT|35.683|139.787|首都高6号\n両国JCT|35.692|139.796|首都高7号\n錦糸町出入口|35.696|139.813|首都高7号\n小松川出入口|35.700|139.849|首都高7号\n一之江出入口|35.694|139.873|首都高7号\n清新町出入口|35.676|139.866|首都高中央環状\n葛西JCT|35.658|139.864|首都高湾岸\n辰巳JCT|35.643|139.810|首都高9号\n有明出入口|35.634|139.790|首都高湾岸\n臨海副都心出入口|35.624|139.780|首都高湾岸\n大井JCT|35.595|139.735|首都高湾岸\n空港中央出入口|35.553|139.762|首都高湾岸\n湾岸市川IC|35.665|139.930|首都高湾岸\n浦安出入口|35.652|139.905|首都高湾岸\n昭和島JCT|35.572|139.744|首都高1号\n平和島出入口|35.578|139.740|首都高1号\n鈴ヶ森出入口|35.588|139.733|首都高1号\n芝浦JCT|35.636|139.752|首都高1号\n浜崎橋JCT|35.649|139.756|首都高1号\n板橋JCT|35.762|139.695|首都高5号\n板橋本町出入口|35.752|139.704|首都高5号\n北池袋出入口|35.738|139.716|首都高5号\n護国寺出入口|35.720|139.727|首都高5号\n飯田橋出入口|35.703|139.744|首都高5号\n西神田出入口|35.697|139.755|首都高5号\n小菅JCT|35.755|139.822|首都高中央環状\n堀切JCT|35.749|139.828|首都高中央環状\n四つ木出入口|35.735|139.838|首都高中央環状\n千鳥町出入口|35.563|139.722|首都高1号\n大師出入口|35.537|139.738|首都高横羽\n浅田出入口|35.521|139.719|首都高横羽\n子安出入口|35.478|139.648|首都高横羽\n横浜駅東口出入口|35.467|139.631|首都高横羽\nみなとみらい出入口|35.458|139.633|首都高横羽\n石川町JCT|35.440|139.644|首都高横羽\n狩場JCT|35.420|139.612|首都高横羽\n横浜公園出入口|35.443|139.641|首都高横羽\n本牧JCT|35.425|139.666|首都高湾岸\n並木出入口|35.370|139.637|首都高湾岸\n杉田出入口|35.383|139.625|首都高湾岸\n磯子出入口|35.398|139.621|首都高湾岸\n新山下出入口|35.432|139.660|首都高湾岸\n川崎浮島JCT|35.509|139.789|首都高湾岸\n生麦JCT|35.495|139.667|首都高横羽/湾岸\n横浜港北JCT|35.524|139.564|横浜環状北線\n馬場出入口|35.489|139.608|横浜環状北線\n新横浜出入口|35.510|139.608|横浜環状北線\n岸谷生麦出入口|35.494|139.651|横浜環状北線\n狩場IC|35.420|139.612|保土ヶ谷BP\n新桜ヶ丘IC|35.448|139.530|保土ヶ谷BP\n南本宿IC|35.447|139.543|保土ヶ谷BP\n本村IC|35.454|139.555|保土ヶ谷BP\n上川井IC|35.478|139.497|保土ヶ谷BP\n下川井IC|35.483|139.507|保土ヶ谷BP`;
+const IC_DB=IC_DB_RAW.split('\n').map(l=>{
+  const [name,lat,lng,road]=l.split('|');
+  return {name,lat:parseFloat(lat),lng:parseFloat(lng),road};
+});
+function findNearestICFromDB(lat,lng,maxDistM){
+  maxDistM=maxDistM||3000;
+  let best=null,minD=Infinity;
+  for(const ic of IC_DB){
+    const d=Math.sqrt(Math.pow((ic.lat-lat)*111320,2)+Math.pow((ic.lng-lng)*Math.cos(lat*Math.PI/180)*111320,2));
+    if(d<minD&&d<maxDistM){minD=d;best=ic;}
   }
-  return best ? best.name : null;
+  return best;
+}
+
+// DB方式：座標から最寄りIC名を検索（Places API不使用）
+function findNearestICFromRoute(lat, lng) {
+  const ic = findNearestICFromDB(lat, lng, 5000);
+  return ic ? ic.name : null;
 }
 
 async function findICNames(route) {
@@ -881,23 +869,23 @@ async function findICNames(route) {
       lastToll = step;
     }
   }
-  // 入口IC: firstTollのstart/end両方で検索し、見つかった方を採用
+  // 入口IC: firstTollのstart/endで検索
   if (firstToll) {
-    const [a, b] = await Promise.all([
-      findNearestICName(firstToll.start_location),
-      findNearestICName(firstToll.end_location)
-    ]);
-    result.entry = a || b;
+    result.entry = findNearestICFromRoute(
+      firstToll.start_location.lat(), firstToll.start_location.lng()
+    ) || findNearestICFromRoute(
+      firstToll.end_location.lat(), firstToll.end_location.lng()
+    );
   }
-  // 出口IC: lastTollのstart/end両方で検索
+  // 出口IC: lastTollのend/startで検索
   if (lastToll && lastToll !== firstToll) {
-    const [a, b] = await Promise.all([
-      findNearestICName(lastToll.start_location),
-      findNearestICName(lastToll.end_location)
-    ]);
-    result.exit = a || b;
+    result.exit = findNearestICFromRoute(
+      lastToll.end_location.lat(), lastToll.end_location.lng()
+    ) || findNearestICFromRoute(
+      lastToll.start_location.lat(), lastToll.start_location.lng()
+    );
   } else if (lastToll) {
-    result.exit = result.entry; // 同じステップの場合
+    result.exit = result.entry;
   }
   return result;
 }
