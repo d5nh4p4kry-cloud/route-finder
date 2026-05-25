@@ -664,28 +664,46 @@ function getDisc(rt,day,ts,etc){
   return{rate:0,name:null};
 }
 
-function estToll(totalM,genM,v,etc,day,ts,roads){
-  const isS=roads.some(r=>/首都高|C1|C2|都心環状|湾岸線|中央環状/.test(r));
-  const isH=roads.some(r=>/阪神高速|阪神/.test(r));
-  let km=totalM<genM?totalM*.4/1000:Math.max(5,(totalM-genM*.6))/1000;
-  km=Math.max(3,Math.min(km,totalM/1000*.8));
-  const metro=isS||isH||roads.some(r=>/東名|中央道|関越|東北道|常磐道|外環|圏央道/.test(r));
-  let base,rt='nexco';
-  if(isS){rt='shuto';base=cShuto(km,v,etc)}
-  else if(isH){rt='hanshin';base=cHanshin(km,v,etc)}
-  else base=cNexco(km,v,metro);
-  const d=getDisc(rt,day,ts,etc);
-  return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base,km:Math.round(km*10)/10,rt};
+// 経路のステップから有料道路区間の実距離を合算（最も正確）
+function getTollDistance(route){
+  let tollM=0;
+  if(!route.legs)return 0;
+  route.legs.forEach(leg=>{
+    leg.steps.forEach(step=>{
+      const text=(step.instructions||'').replace(/<[^>]+>/g,' ');
+      if(TKWS.some(kw=>text.includes(kw))) tollM+=step.distance.value;
+    });
+  });
+  return tollM;
 }
-function estDirect(distM,v,etc,day,ts,name){
-  const km=distM/1000;
-  const isS=/首都高|C1|C2/.test(name||''),isH=/阪神/.test(name||'');
-  let base,rt='nexco';
-  if(isS){rt='shuto';base=cShuto(km,v,etc)}
-  else if(isH){rt='hanshin';base=cHanshin(km,v,etc)}
-  else base=cNexco(km,v,km<40);
-  const d=getDisc(rt,day,ts,etc);
-  return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base,km:Math.round(km*10)/10,rt};
+
+// 経路から有料道路の種別を判定
+function getTollRoadType(route){
+  let isS=false,isH=false;
+  if(!route.legs)return 'nexco';
+  route.legs.forEach(leg=>{
+    leg.steps.forEach(step=>{
+      const text=(step.instructions||'').replace(/<[^>]+>/g,' ');
+      if(/首都高|C1|C2|都心環状|湾岸線|中央環状/.test(text))isS=true;
+      if(/阪神高速|阪神/.test(text))isH=true;
+    });
+  });
+  return isS?'shuto':isH?'hanshin':'nexco';
+}
+
+// 経路の高速料金を正確に計算
+function calcRouteToll(route,v,etc,day,ts){
+  const tollM=getTollDistance(route);
+  const km=Math.max(1,tollM/1000);
+  const type=getTollRoadType(route);
+  const roads=exRoads(route);
+  const metro=type==='nexco'&&/東名|中央道|関越|東北道|常磐道|外環|圏央道|第三京浜|横浜横須賀|新東名/.test(roads.join(','));
+  let base;
+  if(type==='shuto')base=cShuto(km,v,etc);
+  else if(type==='hanshin')base=cHanshin(km,v,etc);
+  else base=cNexco(km,v,metro);
+  const d=getDisc(type,day,ts,etc);
+  return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base,km:Math.round(km*10)/10,rt:type};
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1024,7 +1042,7 @@ async function searchRoutes(o,d,wps){
       const dur=rt.legs.reduce((s,l)=>s+l.duration.value,0);
       const dist=rt.legs.reduce((s,l)=>s+l.distance.value,0);
       if(dur>=genDurSec)continue;
-      const roads=exRoads(rt),ti=estToll(dist,genDistM,v,etc,day,ts,roads);
+      const roads=exRoads(rt),ti=calcRouteToll(rt,v,etc,day,ts);
       const saved=genDurSec-dur,savedMin=saved/60;
       const cpm=savedMin>0?ti.final/savedMin:Infinity;
       const icInfo={ entry:null, exit:null, via:extractJCTVia(rt) };
@@ -1056,8 +1074,7 @@ async function searchRoutes(o,d,wps){
             const rt=wr.routes[0],td=rt.legs.reduce((s,l)=>s+l.duration.value,0),tdi=rt.legs.reduce((s,l)=>s+l.distance.value,0);
             if(td<genDurSec){
               const name=`${p.a.name} → ${p.b.name}`;
-              const sd=google.maps.geometry?google.maps.geometry.spherical.computeDistanceBetween(p.a.loc,p.b.loc):haverD(p.a.loc,p.b.loc);
-              const ti=estDirect(sd,v,etc,day,ts,name);
+              const ti=calcRouteToll(rt,v,etc,day,ts);
               const saved=genDurSec-td,savedMin=saved/60,cpm=savedMin>0?ti.final/savedMin:Infinity;
               const icInfo={entry:p.a.name,exit:p.b.name,via:[]};
               cands.push({type:'wp',ri:0,dr:wr,dur:td,dist:tdi,saved,savedMin:Math.round(savedMin*10)/10,roads:[name],base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:`${p.a.name}経由`,eff:savedMin/Math.max(ti.final,1),icInfo});
@@ -1075,9 +1092,7 @@ async function searchRoutes(o,d,wps){
             const rt=wr.routes[0],td=rt.legs.reduce((s,l)=>s+l.duration.value,0),tdi=rt.legs.reduce((s,l)=>s+l.distance.value,0);
             if(td<genDurSec){
               const name=`${t.a.name} → ${t.b.name} → ${t.c.name}`;
-              const sd1=google.maps.geometry?google.maps.geometry.spherical.computeDistanceBetween(t.a.loc,t.b.loc):haverD(t.a.loc,t.b.loc);
-              const sd2=google.maps.geometry?google.maps.geometry.spherical.computeDistanceBetween(t.b.loc,t.c.loc):haverD(t.b.loc,t.c.loc);
-              const ti=estDirect(sd1+sd2,v,etc,day,ts,name);
+              const ti=calcRouteToll(rt,v,etc,day,ts);
               const saved=genDurSec-td,savedMin=saved/60,cpm=savedMin>0?ti.final/savedMin:Infinity;
               const icInfo={entry:t.a.name,exit:t.c.name,via:[t.b.name]};
               cands.push({type:'triple',ri:0,dr:wr,dur:td,dist:tdi,saved,savedMin:Math.round(savedMin*10)/10,roads:[name],base:ti.base,disc:ti.d,final:ti.final,cpm:Math.round(cpm),km:ti.km,sum:`${t.a.name}→${t.b.name}→${t.c.name}`,eff:savedMin/Math.max(ti.final,1),icInfo});
