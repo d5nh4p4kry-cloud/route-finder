@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v5.1</title>
+<title>ルートファインダー v5.2</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -178,7 +178,18 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 
 /* ── Stop list ── */
 .stop-list { display:flex; flex-direction:column; gap:8px; }
-.stop-row { display:flex; align-items:center; gap:6px; }
+.stop-row { display:flex; align-items:center; gap:6px; position:relative; }
+.sug-box {
+  position:absolute; top:calc(100% + 2px); left:20px; right:0; z-index:600;
+  background:var(--bg-card); border:1px solid var(--accent); border-radius:8px;
+  overflow:hidden; display:none; box-shadow:0 6px 20px rgba(0,0,0,.5);
+}
+.sug-item {
+  padding:10px 12px; font-size:13px; color:var(--text); cursor:pointer;
+  border-bottom:1px solid rgba(45,74,94,.5); line-height:1.4;
+}
+.sug-item:last-child { border-bottom:none; }
+.sug-item:hover, .sug-item:active { background:rgba(0,188,212,.15); }
 .stop-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
 .stop-dot.origin { background:#42a5f5; }
 .stop-dot.waypoint { background:#ff9800; }
@@ -365,7 +376,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v5.1</h1>
+      <h1>ルートファインダー v5.2</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -827,19 +838,99 @@ function renderStops(){
     list.appendChild(row);
     const inp=document.getElementById(`si_${s.id}`);
     inp.value=s.v||'';
+    inp.autocomplete='off';
     s.inputEl=inp;
-    // v5修正: 再レンダリングのたびにAutocompleteを新しいDOM要素へ再バインド
-    if(map){
-      const ac=new google.maps.places.Autocomplete(inp,{componentRestrictions:{country:'jp'},language:'ja'});
-      ac.addListener('place_changed',()=>{s.place=ac.getPlace();s.v=inp.value;});
-      s.ac=ac;
-    }
+    // v5.2: 入力補完は二段構え — Places Autocomplete → エラー時は内蔵Geocoder補完へ自動切替
+    if(map)attachSuggest(s,inp);
     inp.addEventListener('input',()=>{s.v=inp.value;if(!inp.value)s.place=null;});
   });
   const addBtn=document.getElementById('addWpBtn');
   if(addBtn)addBtn.disabled=!map||stops.length>=MAX_STOPS;
   const revBtn=document.getElementById('revBtn');
   if(revBtn)revBtn.disabled=!map;
+}
+
+// ══════════════════════════════════════════════════════════════
+// 入力補完（v5.2）
+// Places Autocompleteがエラーで入力欄を無効化（⚠アイコン表示）した場合、
+// 自動検知して入力欄を復旧し、Places API不要のGeocoder補完に切り替える
+// ══════════════════════════════════════════════════════════════
+let acMode='places'; // 'places' | 'geocoder'
+let geocoder=null;
+function attachSuggest(s,inp){
+  if(acMode==='places'){
+    try{
+      const ac=new google.maps.places.Autocomplete(inp,{componentRestrictions:{country:'jp'},language:'ja'});
+      ac.addListener('place_changed',()=>{s.place=ac.getPlace();s.v=inp.value;});
+      s.ac=ac;
+      return;
+    }catch(e){
+      // 新規プロジェクト等で従来版Autocompleteが使えない場合は即フォールバック
+      switchToGeocoderMode('Places入力補完がこのAPIキーでは利用できないため');
+    }
+  }
+  attachGeocoderSuggest(s,inp);
+}
+function switchToGeocoderMode(reason){
+  if(acMode==='geocoder')return;
+  acMode='geocoder';
+  // Googleが無効化した入力欄を復旧
+  stops.forEach(s=>{
+    const el=s.inputEl;
+    if(!el)return;
+    el.disabled=false;
+    el.classList.remove('gm-err-autocomplete');
+    el.style.backgroundImage='none';
+  });
+  renderStops();
+  setStat('warn',`${reason}、内蔵の地名補完（Geocoder方式）に切り替えました。<strong>住所・施設名はこのまま入力して検索できます。</strong><br><span style="font-size:10px;line-height:1.6">恒久対応: Google Cloud Consoleで「Places API」が有効か、APIキーの「APIの制限」にPlaces APIが含まれているかをご確認ください。</span>`);
+}
+// Places Autocompleteのエラー状態（入力欄の強制無効化・⚠背景）を監視して自動復旧
+function startAcWatchdog(){
+  if(window._acWatch)return;
+  window._acWatch=setInterval(()=>{
+    if(acMode!=='places')return;
+    const broken=stops.some(s=>s.inputEl&&(s.inputEl.disabled||s.inputEl.classList.contains('gm-err-autocomplete')));
+    if(broken)switchToGeocoderMode('Google Places入力補完でエラーが発生したため');
+  },1200);
+}
+// 内蔵補完: Geocoder（Maps JS本体のみで動作・Places API不要）による候補表示
+function attachGeocoderSuggest(s,inp){
+  if(!geocoder){try{geocoder=new google.maps.Geocoder();}catch(e){return;}}
+  if(!inp.parentNode)return;
+  let tmr=null,composing=false;
+  const box=document.createElement('div');
+  box.className='sug-box';
+  inp.parentNode.appendChild(box);
+  const run=()=>{
+    const q=inp.value.trim();
+    if(q.length<2){box.style.display='none';return;}
+    geocoder.geocode({address:q,region:'jp'},(res,st)=>{
+      if(st!=='OK'||!res||!res.length){box.style.display='none';return;}
+      box.innerHTML='';
+      res.slice(0,5).forEach(r=>{
+        const it=document.createElement('div');
+        it.className='sug-item';
+        it.textContent=(r.formatted_address||'').replace(/^日本、?/,'');
+        // mousedownでblurより先に確定させる
+        it.addEventListener('mousedown',ev=>{
+          ev.preventDefault();
+          s.v=it.textContent;
+          s.place={geometry:{location:r.geometry.location}};
+          inp.value=s.v;
+          box.style.display='none';
+        });
+        box.appendChild(it);
+      });
+      box.style.display='block';
+    });
+  };
+  // 日本語IME変換中は補完を走らせない（変換確定後に発火）
+  inp.addEventListener('compositionstart',()=>{composing=true;});
+  inp.addEventListener('compositionend',()=>{composing=false;clearTimeout(tmr);tmr=setTimeout(run,400);});
+  inp.addEventListener('input',()=>{if(composing)return;clearTimeout(tmr);tmr=setTimeout(run,500);});
+  inp.addEventListener('blur',()=>{setTimeout(()=>{box.style.display='none';},200);});
+  inp.addEventListener('focus',()=>{if(box.children.length&&inp.value.trim().length>=2)box.style.display='block';});
 }
 function addWaypoint(){if(stops.length>=MAX_STOPS)return;stops.splice(stops.length-1,0,{id:++stopIdCnt,v:'',place:null});renderStops()}
 function removeStop(i){if(i===0||i===stops.length-1)return;stops.splice(i,1);renderStops()}
@@ -888,7 +979,9 @@ function onMapsOK(){
   try{
     map=new google.maps.Map(document.getElementById('gmap-hidden'),{center:{lat:35.68,lng:139.76},zoom:10});
     dirSvc=new google.maps.DirectionsService();
+    geocoder=new google.maps.Geocoder();
   }catch(e1){alert('Google Maps初期化エラー: '+e1.message);}
+  startAcWatchdog();
   try{
     leafMap=L.map('map',{center:[35.68,139.76],zoom:10});
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -917,6 +1010,10 @@ function onMapsOK(){
 // HELPERS
 // ══════════════════════════════════════════════════════════════
 function setStat(t,m){const b=document.getElementById('sbar');b.className='sbar '+t;b.innerHTML=m}
+// Google Maps APIキー全体の認証エラー時に明確なメッセージを表示
+window.gm_authFailure=function(){
+  setStat('err','Google Maps APIの認証エラーが発生しました。APIキーの有効性・課金設定・リファラ制限（このサイトのURLが許可されているか）をGoogle Cloud Consoleでご確認ください。');
+};
 function showLoad(m){document.getElementById('loadTxt').textContent=m;document.getElementById('loadOv').classList.add('on')}
 function hideLoad(){document.getElementById('loadOv').classList.remove('on')}
 function setLM(m){document.getElementById('loadTxt').textContent=m}
@@ -1191,7 +1288,8 @@ function gmapUrl(navWps){
   const enc=s=>encodeURIComponent(s);
   const oS=stops[0],dS=stops[stops.length-1];
   const locStr=s=>s.place?.geometry?`${s.place.geometry.location.lat()},${s.place.geometry.location.lng()}`:s.v;
-  let url=`https://www.google.com/maps/dir/?api=1&origin=${enc(locStr(oS))}&destination=${enc(locStr(dS))}&travelmode=driving`;
+  // dir_action=navigate: モバイルのGoogleマップアプリでターンバイターン案内を即開始
+  let url=`https://www.google.com/maps/dir/?api=1&origin=${enc(locStr(oS))}&destination=${enc(locStr(dS))}&travelmode=driving&dir_action=navigate`;
   const userWps=stops.slice(1,-1).map(locStr).filter(Boolean);
   const all=[...userWps,...(navWps||[])];
   if(all.length)url+=`&waypoints=${all.map(enc).join('%7C')}`;
