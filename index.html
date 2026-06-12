@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v5.2</title>
+<title>ルートファインダー v5.3</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -376,7 +376,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v5.2</h1>
+      <h1>ルートファインダー v5.3</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -516,7 +516,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
     <div id="results"></div>
 
     <div class="fn">
-      料金根拠(2026年5月時点の体系を簡易計算): NEXCO 普通区間24.6/大都市近郊29.52円/km+150円×1.1。軽0.8/普通1.0/中型1.2。長距離逓減100-200km25%/200km超30%引。首都高 普通29.52円/km 下限300/上限1,950円。阪神高速 同等。ETC割引: 深夜30%（0〜4時・地方部）/休日30%（地方部のみ、<strong>大都市近郊区間・首都高・阪神は対象外</strong>）/平日朝夕 最大約50%相当（<strong>ETCマイレージ登録車のみ・後日還元方式</strong>、本アプリでは30%相当で概算）。首都高・阪神高速 ETC深夜割引20%（0〜4時）。実際の料金は各社の経路別料金検索で必ず確認してください。出典: NEXCO各社・首都高・阪神高速ドライバーズサイト
+      料金根拠(2026年5月時点の体系を簡易計算): NEXCO 地方部24.6/大都市近郊29.52円/km+150円×1.1（<strong>近郊路線は都心側35kmを近郊・以遠を地方部として混合計算</strong>）。軽0.8/普通1.0/中型1.2。長距離逓減100-200km25%/200km超30%引。首都高 普通29.52円/km 下限300/上限1,950円。阪神高速 同等。<strong>首都高・阪神とNEXCOは連続走行でも事業者ごとに別計算して合算</strong>。乗り直し（一般道3km超を挟む再乗車）は乗車ごとにターミナルチャージ・逓減を個別適用。ETC割引: 深夜30%（0〜4時・全線）/休日30%（地方部走行分のみ）/平日朝夕 約30%相当（地方部のみ・<strong>要ETCマイレージ登録・後日還元方式</strong>）。首都高・阪神 ETC深夜割引20%（0〜4時）。実際の料金は各社の経路別料金検索で必ず確認してください。出典: NEXCO各社・首都高・阪神高速ドライバーズサイト
     </div>
   </div>
 </div>
@@ -726,31 +726,56 @@ function cNexco(km,v,m){const r=m?TOLL.nexco.metro:TOLL.nexco.normal;return Math
 function cShuto(km,v,e){if(!e)return TOLL.shuto.max[v];const r=Math.round((km*TOLL.shuto.perKm[v]+TOLL.shuto.terminal)*TOLL.shuto.tax/10)*10;return Math.max(TOLL.shuto.min[v],Math.min(TOLL.shuto.max[v],r))}
 function cHanshin(km,v,e){if(!e)return TOLL.hanshin.max[v];const r=Math.round((km*TOLL.hanshin.perKm[v]+TOLL.hanshin.terminal)*TOLL.hanshin.tax/10)*10;return Math.max(TOLL.hanshin.min[v],Math.min(TOLL.hanshin.max[v],r))}
 
-// 割引判定（v5: 休日割引は地方部のみ＝大都市近郊metro区間は対象外に修正）
-function getDisc(rt,day,ts,etc,metro){
+// 割引判定（v5.3: fullyMetro=全区間が大都市近郊の場合のみ休日・平日朝夕割引を除外）
+function getDisc(rt,day,ts,etc,fullyMetro){
   if(!etc)return{rate:0,name:null};
   if(rt==='shuto')return ts==='midnight'?{rate:DISC.sn,name:'首都高深夜割引20%',cls:'night'}:{rate:0,name:null};
   if(rt==='hanshin')return ts==='midnight'?{rate:DISC.hn,name:'阪神高速深夜割引20%',cls:'night'}:{rate:0,name:null};
   if(ts==='midnight')return{rate:DISC.n,name:'深夜割引30%',cls:'night'};
-  if((day==='holiday'||day==='peak_holiday')&&!metro)return{rate:DISC.h,name:'休日割引30%（地方部）',cls:'holiday'};
-  if(day==='weekday'&&(ts==='morning_rush'||ts==='evening_rush'))return{rate:DISC.c,name:'平日朝夕割引 約30%相当（要マイレージ登録・還元）',cls:'commute'};
+  if((day==='holiday'||day==='peak_holiday')&&!fullyMetro)return{rate:DISC.h,name:'休日割引30%（地方部分）',cls:'holiday'};
+  if(day==='weekday'&&(ts==='morning_rush'||ts==='evening_rush')&&!fullyMetro)return{rate:DISC.c,name:'平日朝夕割引 約30%相当（要マイレージ登録・還元）',cls:'commute'};
   return{rate:0,name:null};
 }
 
-// 条件指定で料金計算（割引シミュレーション用に分離）
+// 条件指定で料金計算（v5.3: NEXCOは大都市近郊≒都心側35km＋地方部の混合計算、
+// 休日・平日朝夕割引は地方部走行分のみに適用、深夜割引は全線適用）
 function tollForConditions(type,km,metro,v,etc,day,ts){
-  let base;
-  if(type==='shuto')base=cShuto(km,v,etc);
-  else if(type==='hanshin')base=cHanshin(km,v,etc);
-  else base=cNexco(km,v,metro);
-  const d=getDisc(type,day,ts,etc,metro);
-  return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base};
+  km=Math.max(1,km);
+  if(type==='shuto'){
+    const base=cShuto(km,v,etc);
+    const d=getDisc('shuto',day,ts,etc,false);
+    return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base};
+  }
+  if(type==='hanshin'){
+    const base=cHanshin(km,v,etc);
+    const d=getDisc('hanshin',day,ts,etc,false);
+    return{base,d,final:d.rate>0?Math.round(base*(1-d.rate)/10)*10:base};
+  }
+  let base,localShare;
+  if(!metro){
+    base=cNexco(km,v,false);localShare=1;
+  }else if(km<=35){
+    base=cNexco(km,v,true);localShare=0;
+  }else{
+    const mKm=35,lKm=km-35,redRatio=TOLL.nexco.red(km)/km;
+    const mPart=mKm*TOLL.nexco.metro,lPart=lKm*TOLL.nexco.normal;
+    base=Math.round(((mPart+lPart)*redRatio*TOLL.nexco.ratio[v]+TOLL.nexco.terminal)*TOLL.nexco.tax/10)*10;
+    localShare=lPart/(mPart+lPart);
+  }
+  const d=getDisc('nexco',day,ts,etc,localShare===0);
+  let final=base;
+  if(d.rate>0){
+    const scope=d.cls==='night'?1:localShare;
+    final=Math.round(base*(1-d.rate*scope)/10)*10;
+  }
+  return{base,d,final};
 }
 
 const TKWS=['高速','有料','Expwy','自動車道','首都高','東名','中央道','関越','東北道','常磐道','圏央道','外環','湾岸','アクアライン','名神','近畿','阪神高速','九州道','中国道'];
 
 // v5.1: 経路を「乗車区間（セグメント）」に分解
 // 有料区間が3km超の一般道で分断されていれば別乗車と判定（＝乗り直し検出）
+// v5.3: ステップ単位の記録を保持（事業者別分割のため）
 function getTollSegments(route){
   const GAP_M=3000;
   const segs=[];
@@ -763,13 +788,24 @@ function getTollSegments(route){
       const dM=step.distance.value||0;
       if(isToll){
         if(cur&&gap>GAP_M){segs.push(cur);cur=null;}
-        if(!cur)cur={km:0,texts:[],start:step.start_location,end:step.end_location};
+        if(!cur)cur={km:0,steps:[],start:step.start_location,end:step.end_location};
         cur.km+=dM/1000;
-        cur.texts.push(text);
+        cur.steps.push({text,km:dM/1000});
         cur.end=step.end_location;
         gap=0;
       }else if(cur){
-        gap+=dM;
+        // v5.3: 道路名を含まないステップ（「そのまま進む」等）の扱い
+        // 走行速度が約65km/h以上なら高速本線上の継続走行とみなす（距離欠落・誤分割防止）
+        const durS=step.duration?step.duration.value:0;
+        const speedMS=durS>0?dM/durS:0;
+        const exitHint=/出口|料金所|降り|ランプ/.test(text);
+        if(!exitHint&&speedMS>=18){
+          cur.km+=dM/1000;
+          cur.steps.push({text,km:dM/1000});
+          cur.end=step.end_location;
+        }else{
+          gap+=dM;
+        }
       }
     });
   });
@@ -778,36 +814,84 @@ function getTollSegments(route){
 }
 function exRoads(route){const r=[],s=new Set();if(route.legs)route.legs.forEach(l=>l.steps.forEach(st=>{const inst=st.instructions||'';for(const k of TKWS){if(inst.includes(k)){const m=inst.match(/([\u4e00-\u9fff\u3040-\u30ffA-Za-z0-9ー]+(?:高速|自動車道|有料道路|Expwy))/);const n=m?m[1]:k;if(!s.has(n)){s.add(n);r.push(n)}break}}}));return r.length?r:['有料道路']}
 
-// v5.1: 経路の高速料金を乗車区間ごとに計算して合算
-// （乗り直しは区間ごとにターミナルチャージ・長距離逓減・割引を個別適用）
+// v5.3: 事業者判定（首都高とNEXCOは連続走行でも別料金体系のため分離が必須）
+const OP_SHUTO_RE=/首都高|東京都高速|C1|C2|都心環状|中央環状/;
+const OP_HANSHIN_RE=/阪神高速/;
+// v5.3: 大都市近郊路線の判定（正式名称対応。東北中央自動車道は地方部として除外）
+function isMetroNexco(text){
+  if(/東名|新東名|関越|外環|圏央|第三京浜|横浜横須賀|京葉道路|東関東|常磐/.test(text))return true;
+  if(/東北自動車道|東北道|東北縦貫/.test(text))return true;
+  // 中央道判定: 「東北中央自動車道」を除去してから残りに中央道があるか確認
+  const t=text.replace(/東北中央自動車道|東北中央道/g,'');
+  if(/中央自動車道|中央道/.test(t))return true;
+  return false;
+}
+function classifyOp(text){
+  if(OP_SHUTO_RE.test(text))return 'shuto';
+  if(OP_HANSHIN_RE.test(text))return 'hanshin';
+  if(/自動車道|高速道路|Expwy|アクアライン|有料道路|有料/.test(text)||isMetroNexco(text))return 'nexco';
+  return null;
+}
+
+// v5.3: 経路の高速料金を「乗車区間 × 事業者」単位で計算して合算
+// 修正前のバグ: 首都高→NEXCOの連続走行を全区間「首都高」と誤分類し、
+// 首都高の上限額(普通車¥1,950)で頭打ちになっていた → 事業者ごとに個別計算
 function calcRouteToll(route,v,etc,day,ts){
   const segs=getTollSegments(route);
-  if(!segs.length)return{base:0,d:{rate:0,name:null},final:0,km:0,rt:'nexco',metro:false,rides:0,segInfo:[]};
+  if(!segs.length)return{base:0,d:{rate:0,name:null},final:0,km:0,rt:'nexco',metro:false,rides:0,segInfo:[],fareUnits:[]};
   let base=0,final=0,km=0,discName=null,discCls=null,anyMetro=false,mainType='nexco';
-  const segInfo=[];
+  const segInfo=[],fareUnits=[];
   segs.forEach(s=>{
-    const text=s.texts.join(' ');
-    const type=/首都高|C1|C2|都心環状|湾岸線|中央環状/.test(text)?'shuto':/阪神高速/.test(text)?'hanshin':'nexco';
-    const metro=type==='nexco'&&/東名|中央道|関越|東北道|常磐道|外環|圏央道|第三京浜|横浜横須賀|新東名/.test(text);
-    const segKm=Math.max(1,s.km);
-    const t=tollForConditions(type,segKm,metro,v,etc,day,ts);
-    base+=t.base;final+=t.final;km+=s.km;
-    if(t.d.name&&!discName){discName=t.d.name;discCls=t.d.cls;}
-    if(metro)anyMetro=true;
-    if(type!=='nexco')mainType=type;
+    // ① 事業者ごとの走行ラン（run）に分割。事業者ヒントのないステップは直前のランに継承
+    const runs=[];
+    let pendingKm=0,pendingTexts=[];
+    s.steps.forEach(st=>{
+      const op=classifyOp(st.text);
+      if(!op){
+        if(runs.length){const r=runs[runs.length-1];r.km+=st.km;r.texts.push(st.text);}
+        else{pendingKm+=st.km;pendingTexts.push(st.text);}
+        return;
+      }
+      if(runs.length&&runs[runs.length-1].op===op){
+        const r=runs[runs.length-1];r.km+=st.km;r.texts.push(st.text);
+      }else{
+        runs.push({op,km:st.km,texts:[st.text]});
+        if(pendingKm){runs[0].km+=pendingKm;runs[0].texts=pendingTexts.concat(runs[0].texts);pendingKm=0;pendingTexts=[];}
+      }
+    });
+    if(pendingKm){
+      if(runs.length)runs[0].km+=pendingKm;
+      else runs.push({op:'nexco',km:pendingKm,texts:pendingTexts});
+    }
+    // ② ラン（事業者）ごとに料金計算して合算
+    const segOps=[];
+    runs.forEach(r=>{
+      if(r.km<0.5)return;
+      const runKm=Math.max(1,r.km);
+      const metro=r.op==='nexco'&&isMetroNexco(r.texts.join(' '));
+      const t=tollForConditions(r.op,runKm,metro,v,etc,day,ts);
+      base+=t.base;final+=t.final;km+=r.km;
+      if(t.d.name&&!discName){discName=t.d.name;discCls=t.d.cls;}
+      if(metro)anyMetro=true;
+      if(r.op!=='nexco')mainType=r.op;
+      fareUnits.push({type:r.op,km:Math.round(runKm*10)/10,metro,fee:t.final});
+      segOps.push({op:r.op,km:Math.round(r.km*10)/10,fee:t.final});
+    });
     segInfo.push({
-      km:Math.round(s.km*10)/10,type,metro,
+      km:Math.round(s.km*10)/10,
+      type:segOps.length===1?segOps[0].op:'mixed',
+      metro:anyMetro,ops:segOps,
       entry:findNearestICFromRoute(s.start.lat(),s.start.lng()),
       exit:findNearestICFromRoute(s.end.lat(),s.end.lng())
     });
   });
   return{base,d:{rate:base>0&&final<base?1-final/base:0,name:discName,cls:discCls},
-    final,km:Math.round(km*10)/10,rt:mainType,metro:anyMetro,rides:segs.length,segInfo};
+    final,km:Math.round(km*10)/10,rt:mainType,metro:anyMetro,rides:segs.length,segInfo,fareUnits};
 }
-// 候補の料金を任意の条件で再計算（割引タイミング提案用・区間単位で合算）
+// 候補の料金を任意の条件で再計算（割引タイミング提案用・事業者ラン単位で合算）
 function candTollAt(c,v,etc,day,ts){
-  if(!c.segInfo||!c.segInfo.length)return tollForConditions(c.rt,Math.max(1,c.km),c.metro,v,etc,day,ts).final;
-  return c.segInfo.reduce((s,g)=>s+tollForConditions(g.type,Math.max(1,g.km),g.metro,v,etc,day,ts).final,0);
+  if(!c.fareUnits||!c.fareUnits.length)return tollForConditions(c.rt,Math.max(1,c.km),c.metro,v,etc,day,ts).final;
+  return c.fareUnits.reduce((s,u)=>s+tollForConditions(u.type,Math.max(1,u.km),u.metro,v,etc,day,ts).final,0);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1408,7 +1492,7 @@ function buildCand(rt,dr,ri,type,roadsLabel,sumLabel,icInfo,navWps,v,etc,day,ts)
   return{type,ri,dr,dur,dist,saved,savedMin:Math.round(savedMin*10)/10,
     roads:roadsLabel,base:ti.base,disc:ti.d,final:ti.final,
     cpm:Math.round(cpm),km:ti.km,rt:ti.rt,metro:ti.metro,
-    rides:ti.rides,segInfo:ti.segInfo,sum:sumLabel,
+    rides:ti.rides,segInfo:ti.segInfo,fareUnits:ti.fareUnits,sum:sumLabel,
     eff:savedMin/Math.max(ti.final,1),icInfo:ic,navWps:navWps||[]};
 }
 // v5.1: 同一実体の候補を排除（距離・時間・乗車回数がほぼ同じなら時短コスト最良の1件に統合）
@@ -1523,8 +1607,8 @@ function renderDiscHint(v,etc,day,ts,dep){
   // 深夜0〜4時シナリオ（乗車区間ごとに再計算して合算）
   const midF=candTollAt(best,v,etc,day,'midnight');
   if(midF<cur)lines.push(`<strong>深夜0〜4時に走行</strong>すると 約¥${midF.toLocaleString()}（<strong>−¥${(cur-midF).toLocaleString()}</strong>）`);
-  // 休日シナリオ（NEXCO地方部区間がある場合のみ）
-  if(day==='weekday'&&(best.segInfo||[]).some(g=>g.type==='nexco'&&!g.metro)){
+  // 休日シナリオ（NEXCO地方部走行分がある場合のみ）
+  if(day==='weekday'&&(best.fareUnits||[]).some(u=>u.type==='nexco'&&(!u.metro||u.km>35))){
     const holF=candTollAt(best,v,etc,'holiday',ts);
     if(holF<cur)lines.push(`<strong>土日祝に走行</strong>すると 約¥${holF.toLocaleString()}（<strong>−¥${(cur-holF).toLocaleString()}</strong>）※地方部区間のみ割引`);
   }
@@ -1618,6 +1702,13 @@ function displayResults(res,filteredOut){
       </div>
       <div style="margin-top:6px;font-size:10px;color:var(--text-muted);line-height:1.6">
         ${r.disc?.rate>0?`割引前¥${r.base.toLocaleString()} → 割引後¥${r.final.toLocaleString()} / `:''}有料道路区間 約${r.km}km / ${r.savedMin}分短縮 / 時短コスト${r.cpm}円/分
+        ${(()=>{
+          if(!r.fareUnits||r.fareUnits.length<2)return '';
+          const OPN={shuto:'首都高',hanshin:'阪神高速',nexco:'NEXCO等'};
+          const agg={};
+          r.fareUnits.forEach(u=>{const k=OPN[u.type]||u.type;agg[k]=agg[k]||{km:0,fee:0};agg[k].km+=u.km;agg[k].fee+=u.fee;});
+          return '<br>料金内訳: '+Object.entries(agg).map(([k,a])=>`${k} 約${Math.round(a.km)}km ¥${a.fee.toLocaleString()}`).join(' ＋ ');
+        })()}
       </div>
       ${icHtml}
       <div class="rc-actions">
