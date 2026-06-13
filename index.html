@@ -1260,7 +1260,7 @@ function extractJCTVia(route){
       }
     });
   });
-  return [...viaSet].slice(0,3);
+  return [...viaSet];
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1582,19 +1582,24 @@ function buildCand(rt,dr,ri,type,roadsLabel,sumLabel,icInfo,navWps,v,etc,day,ts)
   const saved=genDurSec-dur,savedMin=saved/60;
   const cpm=savedMin>0?ti.final/savedMin:Infinity;
   // v5.1: セグメント実測から入口・出口・乗り直し点を確定（指定IC名より実経路を優先）
+  // v5.5: 経由JCTは実経路全体から常に抽出し、乗り直し情報と統合して保持
   const seg=ti.segInfo;
   const ic={entry:icInfo.entry,exit:icInfo.exit,via:icInfo.via||[]};
+  const jcts=extractJCTVia(rt); // 実経路の全JCTを抽出（件数制限なし）
   if(seg.length>=1){
     if(seg[0].entry)ic.entry=seg[0].entry;
     if(seg[seg.length-1].exit)ic.exit=seg[seg.length-1].exit;
     if(seg.length>=2){
-      ic.via=[];
+      // 乗り直しの場合: 降車・再乗車情報を優先、その間にJCTも挟む
+      ic.rideChanges=[];
       for(let i=0;i<seg.length-1;i++){
         const off=seg[i].exit||'？',on=seg[i+1].entry||'？';
-        ic.via.push(`${off} で降車 → 一般道 → ${on} で再乗車`);
+        ic.rideChanges.push(`${off} で降車 → 一般道 → ${on} で再乗車`);
       }
     }
   }
+  // JCT一覧は入口・出口と重複しないもののみ保持
+  ic.jcts=jcts.filter(j=>j!==ic.entry&&j!==ic.exit);
   return{type,ri,dr,dur,dist,saved,savedMin:Math.round(savedMin*10)/10,
     roads:roadsLabel,base:ti.base,disc:ti.d,final:ti.final,
     cpm:Math.round(cpm),km:ti.km,rt:ti.rt,metro:ti.metro,
@@ -1785,13 +1790,15 @@ function displayResults(res,filteredOut){
       :`<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(255,255,255,.06);color:var(--text-muted)">直行 1回乗車</span>`;
     const arr=fmtClock(new Date(dep.getTime()+r.dur*1000));
     const ic=r.icInfo||{};
-    const hasVia=ic.via&&ic.via.length>0;
-    const hasAny=ic.entry||ic.exit||hasVia;
+    const hasJcts=ic.jcts&&ic.jcts.length>0;
+    const hasRideChanges=ic.rideChanges&&ic.rideChanges.length>0;
+    const hasAny=ic.entry||ic.exit||hasJcts||hasRideChanges;
     let icHtml='';
     if(hasAny){
       icHtml='<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.25);border-radius:7px;font-size:11px;line-height:1.9">'
         +(ic.entry?'<div><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">入口</span><br><strong style="color:var(--blue)">\u{1F535} '+escHTML(ic.entry)+'</strong></div>':'')
-        +(hasVia?'<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">'+(r.rides>=2?'乗り直し':'経由')+'</span><br><span style="color:'+(r.rides>=2?'#ce93d8':'var(--text-dim)')+'">\u2B07 '+ic.via.map(escHTML).join('<br>\u2B07 ')+'</span></div>':'')
+        +(hasJcts?'<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">経由JCT</span>'+ic.jcts.map(j=>'<br><span style="color:var(--text-dim)">\u2B07 '+escHTML(j)+'</span>').join('')+'</div>':'')
+        +(hasRideChanges?'<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">乗り直し</span>'+ic.rideChanges.map(c=>'<br><span style="color:#ce93d8">\u2B07 '+escHTML(c)+'</span>').join('')+'</div>':'')
         +(ic.exit?'<div style="margin-top:4px"><span style="color:var(--text-muted);font-size:9px;letter-spacing:1px">出口</span><br><strong style="color:var(--red)">\u{1F534} '+escHTML(ic.exit)+'</strong></div>':'')
         +((r.segInfo&&r.segInfo.length>=2)?'<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(45,74,94,.5);color:var(--text-muted);font-size:10px">区間内訳: '+r.segInfo.map((g,gi)=>`第${gi+1}区間 約${g.km}km`).join(' / ')+'</div>':'')
         +'</div>';
