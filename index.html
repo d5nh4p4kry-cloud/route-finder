@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v5.3</title>
+<title>ルートファインダー v5.5</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -376,7 +376,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v5.3</h1>
+      <h1>ルートファインダー v5.5</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -1102,6 +1102,109 @@ function showLoad(m){document.getElementById('loadTxt').textContent=m;document.g
 function hideLoad(){document.getElementById('loadOv').classList.remove('on')}
 function setLM(m){document.getElementById('loadTxt').textContent=m}
 function fmtD(s){const h=Math.floor(s/3600),m=Math.round((s%3600)/60);return h>0?`${h}時間${m}分`:`${m}分`}
+// v5.4: 所要時間は渋滞考慮値（duration_in_traffic）を優先して合算
+// Googleは departureTime 指定時、現在/指定時刻の渋滞・渋滞予測込みの時間を別フィールドで返す
+function legsDur(legs){
+  return legs.reduce((s,l)=>s+((l.duration_in_traffic&&l.duration_in_traffic.value)||l.duration.value),0);
+}
+function legsTrafficAware(legs){
+  return legs.some(l=>l.duration_in_traffic&&l.duration_in_traffic.value);
+}
+
+// ══════════════════════════════════════════════════════════════
+// v5.5: stopover経由地で渋滞込み時間が返らない経路の補正
+// レグ単位（出発地→立ち寄り地→…→目的地）に分割して個別に渋滞込み時間を取得し、
+// 連鎖方式（次区間の出発時刻＝前区間の渋滞込み到着時刻）で合算する
+// ══════════════════════════════════════════════════════════════
+// 元経路と同じ道を通らせるため、レグ内の中間2点をvia（通過点）として抽出
+function sampleLegVias(leg){
+  const steps=leg.steps||[];
+  if(!steps.length)return[];
+  const total=steps.reduce((s,st)=>s+(st.distance?st.distance.value:0),0);
+  if(total<=1000)return[];
+  const targets=[0.4*total,0.75*total];
+  const out=[];let acc=0,ti=0;
+  for(const st of steps){
+    acc+=st.distance?st.distance.value:0;
+    while(ti<targets.length&&acc>=targets[ti]){out.push(st.end_location);ti++;}
+  }
+  return out.slice(0,2);
+}
+function routeLegTraffic(o,d,vias,depDate,avoidTolls){
+  return new Promise((res,rej)=>dirSvc.route({
+    origin:o,destination:d,
+    waypoints:vias.map(p=>({location:p,stopover:false})),
+    travelMode:google.maps.TravelMode.DRIVING,avoidTolls:!!avoidTolls,region:'jp',
+    drivingOptions:{departureTime:depDate,trafficModel:google.maps.TrafficModel.BEST_GUESS}
+  },(r,s)=>s==='OK'?res(r):rej(new Error(s))));
+}
+// 連鎖方式: 各レグの出発時刻を前レグの渋滞込み到着時刻に進めながら合算
+async function chainedTrafficDuration(route,dep,avoidTolls){
+  let t=(dep&&dep.getTime()>Date.now())?new Date(dep):new Date();
+  let total=0,aware=true;
+  for(const leg of route.legs){
+    let sec=leg.duration.value,legAware=false;
+    try{
+      const r=await routeLegTraffic(leg.start_location,leg.end_location,sampleLegVias(leg),t,avoidTolls);
+      const l=r.routes[0].legs[0];
+      // 距離が±15%以内＝同一経路とみなせる場合のみ採用（別ルートの時間を混ぜない）
+      const distOk=Math.abs(l.distance.value-leg.distance.value)<=leg.distance.value*0.15;
+      if(distOk){
+        sec=(l.duration_in_traffic&&l.duration_in_traffic.value)||l.duration.value;
+        legAware=!!(l.duration_in_traffic&&l.duration_in_traffic.value);
+      }
+    }catch(e){}
+    if(!legAware)aware=false;
+    total+=sec;
+    t=new Date(t.getTime()+sec*1000);
+  }
+  return{total,aware};
+}
+// 渋滞未反映の一般道基準・候補を区間分割で補正（APIコスト上限: 16リクエスト）
+async function refineTraffic(cands,dep){
+  let budget=16;
+  // ① 一般道基準（経由地ありで未反映の場合）— 基準が変わるので最優先
+  const genRt=genResult&&genResult.routes&&genResult.routes[0];
+  if(!window._genTraffic&&genRt&&genRt.legs.length>=2&&genRt.legs.length<=6&&budget>=genRt.legs.length){
+    setLM('一般道の渋滞予測を区間分割で補正中...');
+    try{
+      const r=await chainedTrafficDuration(genRt,dep,true);
+      budget-=genRt.legs.length;
+      if(r.total>0){
+        genDurSec=r.total;
+        window._genTraffic=r.aware;
+        document.getElementById('genTime').textContent=fmtD(genDurSec);
+        document.getElementById('genArr').textContent=fmtClock(new Date((lastDepDate||new Date()).getTime()+genDurSec*1000));
+        document.getElementById('genVar').textContent=
+          (r.aware?'🚦 渋滞予測を反映済み（区間分割合算）':'⚠ 渋滞データ一部なし（区間分割で部分補正）');
+      }
+    }catch(e){}
+  }
+  // ② 渋滞未反映候補（時短コスト上位から最大6件・各4レグまで）
+  const targets=[];
+  for(const c of [...cands].filter(c=>!c.trafficAware).sort((a,b)=>a.cpm-b.cpm)){
+    if(targets.length>=6)break;
+    const n=c.dr.routes[c.ri||0].legs.length;
+    if(n<1||n>4||budget-n<0)continue;
+    budget-=n;targets.push(c);
+  }
+  if(targets.length){
+    setLM(`渋滞予測を区間分割で補正中... (${targets.length}件)`);
+    await Promise.all(targets.map(async c=>{
+      try{
+        const r=await chainedTrafficDuration(c.dr.routes[c.ri||0],dep,false);
+        if(r.total>0){c.dur=r.total;c.trafficAware=r.aware;c.trafficChained=true;}
+      }catch(e){}
+    }));
+  }
+  // ③ 短縮時間・時短コストを補正後の値で再計算し、基準割れ候補を除外
+  cands.forEach(c=>{
+    c.saved=genDurSec-c.dur;
+    c.savedMin=Math.round(c.saved/60*10)/10;
+    c.cpm=c.saved>0?Math.round(c.final/(c.saved/60)):Infinity;
+  });
+  return cands.filter(c=>c.dur<genDurSec);
+}
 function fmtDist(m){return m>=1000?`${(m/1000).toFixed(1)}km`:`${m}m`}
 function fmtClock(d){const p=n=>String(n).padStart(2,'0');return `${p(d.getHours())}:${p(d.getMinutes())}`}
 function clearRoutes(){
@@ -1427,17 +1530,17 @@ async function startSearch(){
     // 重複排除（距離・時間がほぼ同じものは同一とみなす）して最速を採用
     const seenG=new Set();
     genVariants=genVariants.filter(rt=>{
-      const du=rt.legs.reduce((s,l)=>s+l.duration.value,0);
+      const du=legsDur(rt.legs);
       const di=rt.legs.reduce((s,l)=>s+l.distance.value,0);
       const k=`${Math.round(di/300)}_${Math.round(du/45)}`;
       if(seenG.has(k))return false;
       seenG.add(k);return true;
     });
-    genVariants.sort((a,b)=>
-      a.legs.reduce((s,l)=>s+l.duration.value,0)-b.legs.reduce((s,l)=>s+l.duration.value,0));
+    genVariants.sort((a,b)=>legsDur(a.legs)-legsDur(b.legs));
     const bestGen=genVariants[0];
     genResult={routes:genVariants}; // [0]=最速、以降はIC探索のコリドー拡張に利用
-    genDurSec=bestGen.legs.reduce((s,l)=>s+l.duration.value,0);
+    genDurSec=legsDur(bestGen.legs);
+    window._genTraffic=legsTrafficAware(bestGen.legs);
     genDistM=bestGen.legs.reduce((s,l)=>s+l.distance.value,0);
     genLeafLayer=L.polyline(
       bestGen.overview_path.map(p=>[p.lat(),p.lng()]),
@@ -1447,7 +1550,9 @@ async function startSearch(){
     document.getElementById('genTime').textContent=fmtD(genDurSec);
     document.getElementById('genDist').textContent=fmtDist(genDistM);
     document.getElementById('genArr').textContent=fmtClock(new Date(dep.getTime()+genDurSec*1000));
-    document.getElementById('genVar').textContent=genVariants.length>1?`一般道 ${genVariants.length}通りを検証し最速ルートを表示中`:'';
+    document.getElementById('genVar').textContent=
+      (genVariants.length>1?`一般道 ${genVariants.length}通りを検証し最速ルートを表示中 / `:'')
+      +(window._genTraffic?'🚦 渋滞予測を反映済み':'⚠ 渋滞データなし（標準時間で表示）');
     document.getElementById('genInfo').classList.add('on');
     saveHistory(stops[0].v||stops[0].inputEl?.value||'',stops[stops.length-1].v||stops[stops.length-1].inputEl?.value||'');
     setStat('info',`走行条件: ${c.label}`);
@@ -1468,7 +1573,8 @@ function routeViaWps(o,d,wps,viaPts,dep,avoidTolls){
   },(r,s)=>s==='OK'?res(r):rej(new Error(s))));
 }
 function buildCand(rt,dr,ri,type,roadsLabel,sumLabel,icInfo,navWps,v,etc,day,ts){
-  const dur=rt.legs.reduce((s,l)=>s+l.duration.value,0);
+  const dur=legsDur(rt.legs);
+  const trafficAware=legsTrafficAware(rt.legs);
   const dist=rt.legs.reduce((s,l)=>s+l.distance.value,0);
   if(dur>=genDurSec)return null;
   const ti=calcRouteToll(rt,v,etc,day,ts);
@@ -1493,6 +1599,7 @@ function buildCand(rt,dr,ri,type,roadsLabel,sumLabel,icInfo,navWps,v,etc,day,ts)
     roads:roadsLabel,base:ti.base,disc:ti.d,final:ti.final,
     cpm:Math.round(cpm),km:ti.km,rt:ti.rt,metro:ti.metro,
     rides:ti.rides,segInfo:ti.segInfo,fareUnits:ti.fareUnits,sum:sumLabel,
+    trafficAware,
     eff:savedMin/Math.max(ti.final,1),icInfo:ic,navWps:navWps||[]};
 }
 // v5.1: 同一実体の候補を排除（距離・時間・乗車回数がほぼ同じなら時短コスト最良の1件に統合）
@@ -1561,8 +1668,12 @@ async function searchRoutes(o,d,wps,dep){
         done+=batch.length;
       }
     }
-    hideLoad();
     cands=dedupeCands(cands);
+    // v5.5: stopover起因で渋滞未反映の候補を区間分割で補正
+    if(cands.some(c=>!c.trafficAware)||!window._genTraffic){
+      cands=await refineTraffic(cands,dep);
+    }
+    hideLoad();
     if(!cands.length){showGenRec();setStat('warn','有料道路で時間短縮できるルートが見つかりませんでした。一般道をご利用ください。');return}
     window._cands=cands;
     applySortAndDisplay();
@@ -1701,7 +1812,7 @@ function displayResults(res,filteredOut){
         <div class="rc-d"><span class="l">到着予測</span><span class="v ds">${arr}</span></div>
       </div>
       <div style="margin-top:6px;font-size:10px;color:var(--text-muted);line-height:1.6">
-        ${r.disc?.rate>0?`割引前¥${r.base.toLocaleString()} → 割引後¥${r.final.toLocaleString()} / `:''}有料道路区間 約${r.km}km / ${r.savedMin}分短縮 / 時短コスト${r.cpm}円/分
+        ${r.trafficAware?(r.trafficChained?'🚦渋滞予測 反映（区間分割合算）':'🚦渋滞予測 反映'):'⚠渋滞予測 未反映（標準時間）'} / ${r.disc?.rate>0?`割引前¥${r.base.toLocaleString()} → 割引後¥${r.final.toLocaleString()} / `:''}有料道路区間 約${r.km}km / ${r.savedMin}分短縮 / 時短コスト${r.cpm}円/分
         ${(()=>{
           if(!r.fareUnits||r.fareUnits.length<2)return '';
           const OPN={shuto:'首都高',hanshin:'阪神高速',nexco:'NEXCO等'};
