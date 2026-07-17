@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v5.7</title>
+<title>ルートファインダー v5.8</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -376,7 +376,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v5.7</h1>
+      <h1>ルートファインダー v5.8</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -1054,7 +1054,7 @@ function connectMap(){
   document.querySelector('.api-btn.connect').textContent='接続中...';
   document.querySelector('.api-btn.connect').style.opacity='0.5';
   const s=document.createElement('script');
-  s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP';
+  s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&v=quarterly&libraries=places,geometry&callback=onMapsOK&language=ja&region=JP';
   s.async=true;
   s.onerror=function(){alert('API読み込み失敗。キーを確認してください。');};
   document.head.appendChild(s);
@@ -1548,6 +1548,24 @@ function openNav(idx,ev){
 // ══════════════════════════════════════════════════════════════
 // SEARCH（Phase 1: 一般道基準）
 // ══════════════════════════════════════════════════════════════
+// v5.8: 通信自己診断 — Googleマップサーバーへの到達性を確認
+async function netProbe(){
+  const imgTest=new Promise(res=>{
+    const im=new Image();
+    const t=setTimeout(()=>res(false),6000);
+    im.onload=()=>{clearTimeout(t);res(true)};
+    im.onerror=()=>{clearTimeout(t);res(false)};
+    im.src='https://maps.gstatic.com/mapfiles/transparent.png?_='+Date.now();
+  });
+  let api=false;
+  try{
+    await fetch('https://maps.googleapis.com/maps/api/js?_probe='+Date.now(),{mode:'no-cors',cache:'no-store'});
+    api=true;
+  }catch(_){api=false;}
+  const gst=await imgTest;
+  return {gst,api};
+}
+
 // v5.7: 想定外エラーの安全網 — どんなエラーでも無限ロードにせず画面に表示する
 window.addEventListener('unhandledrejection',ev=>{
   try{hideLoad();}catch(_){}
@@ -1620,7 +1638,26 @@ async function startSearch(){
     saveHistory(stops[0].v||stops[0].inputEl?.value||'',stops[stops.length-1].v||stops[stops.length-1].inputEl?.value||'');
     setStat('info',`走行条件: ${c.label}`);
     await searchRoutes(o,d,wps,dep);
-  }catch(e){hideLoad();setStat('err',`エラー: ${e.message}`)}
+  }catch(e){
+    hideLoad();
+    setStat('err',`エラー: ${e.message}`);
+    // タイムアウト時は通信自己診断を自動実行して原因を切り分け
+    if(/25秒間応答/.test(e.message||'')){
+      setStat('err',`エラー: ${e.message}<br><span style="font-size:11px">🔍 通信自己診断を実行中...</span>`);
+      try{
+        const p=await netProbe();
+        let diag;
+        if(!p.api&&!p.gst){
+          diag='🔴 <strong>診断: Googleマップのサーバーへの通信がブロックされています。</strong><br>iPhoneの場合: ①設定→Safari→機能拡張のコンテンツブロッカー(広告ブロック)を一時オフ ②設定→Apple ID→iCloud→プライベートリレーをオフ ③Wi-Fiを切ってモバイル回線で再試行、をお試しください。';
+        }else if(!p.api){
+          diag='🟠 <strong>診断: APIサーバー(maps.googleapis.com)への通信のみ失敗しています。</strong><br>コンテンツブロッカーやWi-FiのDNSフィルタによる部分ブロックの可能性があります。モバイル回線での再試行をお試しください。';
+        }else{
+          diag='🟡 <strong>診断: ネットワークは正常です。Google Cloud側の設定問題の可能性が高いです。</strong><br>Google Cloud Consoleで ①「お支払い」の請求先アカウントが有効か ②「APIとサービス」でDirections APIが有効か ③APIキーの「APIの制限」にDirections APIが含まれるか をご確認ください。';
+        }
+        setStat('err',`エラー: ${e.message}<br><span style="font-size:11px;line-height:1.8">${diag}</span>`);
+      }catch(_){}
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
