@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v5.8</title>
+<title>ルートファインダー v5.9</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -376,7 +376,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v5.8</h1>
+      <h1>ルートファインダー v5.9</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -1548,6 +1548,38 @@ function openNav(idx,ev){
 // ══════════════════════════════════════════════════════════════
 // SEARCH（Phase 1: 一般道基準）
 // ══════════════════════════════════════════════════════════════
+// v5.9: Google Maps API認証エラーの正確な原因を画面表示
+// Googleはエラー詳細をconsole.errorにのみ出力するため、これを捕捉して表示する
+const GM_ERR_JA={
+  'BillingNotEnabledMapError':'このプロジェクトで課金（請求先アカウント）が有効になっていません。Google Cloud Console→「お支払い」で請求先アカウントを紐付け・有効化してください。',
+  'RefererNotAllowedMapError':'APIキーの「アプリケーションの制限（HTTPリファラー）」にこのサイトが含まれていません。キー設定でリファラーに https://d5nh4p4kry-cloud.github.io/* を追加してください。',
+  'ApiNotActivatedMapError':'Maps JavaScript API（またはDirections等の利用API）がプロジェクトで有効化されていません。「APIとサービス」→「ライブラリ」で有効化してください。',
+  'InvalidKeyMapError':'APIキーが無効です（削除・再生成された可能性）。Google Cloud Consoleで新しいキーを確認してください。',
+  'ExpiredKeyMapError':'APIキーの有効期限が切れています。新しいキーを発行してください。',
+  'OverQuotaMapError':'APIの利用上限（クォータ）を超過しています。「IAMと管理」→「割り当て」または課金設定をご確認ください。',
+  'ProjectDeniedMapError':'プロジェクトでこのAPIの利用が拒否されています。プロジェクト設定をご確認ください。',
+  'ClientBillingNotEnabledMapError':'課金が有効になっていません。「お支払い」をご確認ください。'
+};
+function showGmError(code){
+  const ja=GM_ERR_JA[code]||'Google Cloud Consoleの課金設定・API有効化・キー制限をご確認ください。';
+  try{hideLoad();}catch(_){}
+  try{setStat('err',`🔴 <strong>Google Maps API認証エラー: ${code}</strong><br><span style="font-size:11px;line-height:1.8">${ja}</span>`);}catch(_){}
+}
+window.gm_authFailure=function(){
+  showGmError('（認証失敗: gm_authFailure）');
+};
+(function(){
+  const orig=console.error;
+  console.error=function(...args){
+    try{
+      const s=args.map(a=>String(a)).join(' ');
+      const m=s.match(/([A-Za-z]+MapError)/);
+      if(m)showGmError(m[1]);
+    }catch(_){}
+    return orig.apply(console,args);
+  };
+})();
+
 // v5.8: 通信自己診断 — Googleマップサーバーへの到達性を確認
 async function netProbe(){
   const imgTest=new Promise(res=>{
