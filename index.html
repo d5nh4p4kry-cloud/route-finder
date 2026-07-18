@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v5.9</title>
+<title>ルートファインダー v5.9.1</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -376,7 +376,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v5.9</h1>
+      <h1>ルートファインダー v5.9.1</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -496,6 +496,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
         <option value="early_morning">早朝 4〜6時</option>
       </select>
       <button class="btn btn-p" id="searchBtn" disabled onclick="startSearch()" style="margin-top:6px">ルート検索開始</button>
+      <button class="btn" onclick="apiSelfTest()" style="margin-top:8px;width:100%;font-size:11px;padding:8px;background:rgba(171,71,188,.12);border:1px solid rgba(171,71,188,.4);color:#ce93d8">🔬 API自己診断（不具合時にお使いください）</button>
     </div>
 
     <!-- 一般道情報 -->
@@ -1548,6 +1549,38 @@ function openNav(idx,ev){
 // ══════════════════════════════════════════════════════════════
 // SEARCH（Phase 1: 一般道基準）
 // ══════════════════════════════════════════════════════════════
+// v5.9.1: API自己診断 — 各Googleサービスを個別テストしてどれが壊れているか特定
+async function apiSelfTest(){
+  setStat('info','🔬 API自己診断を実行中...（最大40秒）');
+  const out=[];
+  const t10=(p)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('無応答(10秒タイムアウト)')),10000))]);
+  // 0. ライブラリの存在確認
+  out.push(`Maps JS本体: ${typeof google!=='undefined'&&google.maps?'✅ 読込済':'❌ 未読込'}`);
+  out.push(`Placesライブラリ: ${typeof google!=='undefined'&&google.maps&&google.maps.places&&google.maps.places.Autocomplete?'✅ あり':'❌ なし'}`);
+  // 1. Geocoder
+  try{
+    await t10(new Promise((res,rej)=>{
+      new google.maps.Geocoder().geocode({address:'東京駅',region:'jp'},(r,s)=>s==='OK'?res(r):rej(new Error(s)));
+    }));
+    out.push('Geocoder(住所検索): ✅ 正常');
+  }catch(e){out.push(`Geocoder(住所検索): ❌ ${e.message}`);}
+  // 2. Directions
+  try{
+    await t10(new Promise((res,rej)=>{
+      dirSvc.route({origin:'東京駅',destination:'横浜駅',travelMode:google.maps.TravelMode.DRIVING},(r,s)=>s==='OK'?res(r):rej(new Error(s)));
+    }));
+    out.push('Directions(経路検索): ✅ 正常');
+  }catch(e){out.push(`Directions(経路検索): ❌ ${e.message}`);}
+  // 3. Directions(渋滞予測付き=drivingOptions)
+  try{
+    await t10(new Promise((res,rej)=>{
+      dirSvc.route({origin:'東京駅',destination:'横浜駅',travelMode:google.maps.TravelMode.DRIVING,drivingOptions:{departureTime:new Date(Date.now()+60000),trafficModel:google.maps.TrafficModel.BEST_GUESS}},(r,s)=>s==='OK'?res(r):rej(new Error(s)));
+    }));
+    out.push('Directions(渋滞予測付き): ✅ 正常');
+  }catch(e){out.push(`Directions(渋滞予測付き): ❌ ${e.message}`);}
+  setStat('info',`🔬 <strong>API自己診断結果</strong><br><span style="font-size:11px;line-height:2">${out.join('<br>')}</span><br><span style="font-size:10px;color:var(--text-dim)">この結果を開発者に伝えてください。</span>`);
+}
+
 // v5.9: Google Maps API認証エラーの正確な原因を画面表示
 // Googleはエラー詳細をconsole.errorにのみ出力するため、これを捕捉して表示する
 const GM_ERR_JA={
