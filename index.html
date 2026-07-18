@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v5.9.1</title>
+<title>ルートファインダー v6.1</title>
+<!-- v6.0: iPhoneホーム画面アプリ化（共有→ホーム画面に追加 で全画面アプリとして起動） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ルートファインダー">
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,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">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -376,7 +382,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v5.9.1</h1>
+      <h1>ルートファインダー v6.1</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -985,34 +991,34 @@ function startAcWatchdog(){
 }
 // 内蔵補完: Geocoder（Maps JS本体のみで動作・Places API不要）による候補表示
 function attachGeocoderSuggest(s,inp){
-  if(!geocoder){try{geocoder=new google.maps.Geocoder();}catch(e){return;}}
+  if(!geocoder){try{geocoder=new google.maps.Geocoder();}catch(e){/* 新Places APIのみで動作継続 */}}
   if(!inp.parentNode)return;
   let tmr=null,composing=false;
   const box=document.createElement('div');
   box.className='sug-box';
   inp.parentNode.appendChild(box);
-  const run=()=>{
+  const run=async()=>{
     const q=inp.value.trim();
     if(q.length<2){box.style.display='none';return;}
-    geocoder.geocode({address:q,region:'jp'},(res,st)=>{
-      if(st!=='OK'||!res||!res.length){box.style.display='none';return;}
-      box.innerHTML='';
-      res.slice(0,5).forEach(r=>{
-        const it=document.createElement('div');
-        it.className='sug-item';
-        it.textContent=(r.formatted_address||'').replace(/^日本、?/,'');
-        // mousedownでblurより先に確定させる
-        it.addEventListener('mousedown',ev=>{
-          ev.preventDefault();
-          s.v=it.textContent;
-          s.place={geometry:{location:r.geometry.location}};
-          inp.value=s.v;
-          box.style.display='none';
-        });
-        box.appendChild(it);
+    const items=await placeSuggest(q); // 新Places API優先・旧Geocoderフォールバック
+    if(inp.value.trim()!==q)return; // 入力が進んでいたら破棄
+    if(!items.length){box.style.display='none';return;}
+    box.innerHTML='';
+    items.forEach(r=>{
+      const it=document.createElement('div');
+      it.className='sug-item';
+      it.textContent=r.label;
+      // mousedownでblurより先に確定させる
+      it.addEventListener('mousedown',ev=>{
+        ev.preventDefault();
+        s.v=it.textContent;
+        s.place=(r.lat!=null)?{geometry:{location:new google.maps.LatLng(r.lat,r.lng)}}:null;
+        inp.value=s.v;
+        box.style.display='none';
       });
-      box.style.display='block';
+      box.appendChild(it);
     });
+    box.style.display='block';
   };
   // 日本語IME変換中は補完を走らせない（変換確定後に発火）
   inp.addEventListener('compositionstart',()=>{composing=true;});
@@ -1240,12 +1246,163 @@ function dirErrMsg(s){
 function withTimeout(p,ms){
   return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error(dirErrMsg('TIMEOUT'))),ms||25000))]);
 }
+// ══════════════════════════════════════════════════════════════
+// v6.1: 新世代APIエンジン（Routes API / Places API New）
+// 旧Directions/GeocoderのJSサービスが無応答になる環境向け。
+// エラーが明示的に返るため原因特定も容易。旧方式へは自動フォールバック。
+// ══════════════════════════════════════════════════════════════
+function getKey(){
+  const el=document.getElementById('apiKey');
+  return ((el&&el.value)||'').trim()||SS.get('rf_api_key')||'';
+}
+// エンコード済みポリライン → google.maps.LatLng配列
+function decodePolyline(str){
+  let idx=0,lat=0,lng=0;const out=[];
+  while(idx<str.length){
+    for(let which=0;which<2;which++){
+      let shift=0,result=0,b;
+      do{b=str.charCodeAt(idx++)-63;result|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20);
+      const d=(result&1)?~(result>>1):(result>>1);
+      if(which===0)lat+=d;else lng+=d;
+    }
+    out.push(new google.maps.LatLng(lat/1e5,lng/1e5));
+  }
+  return out;
+}
+function durSec(s){if(!s)return 0;return Math.round(parseFloat(String(s).replace('s',''))||0);}
+function toRWp(x,via){
+  if(x==null)return null;
+  if(typeof x==='string'){const w={address:x};if(via)w.via=true;return w;}
+  const lat=(typeof x.lat==='function')?x.lat():x.lat;
+  const lng=(typeof x.lng==='function')?x.lng():x.lng;
+  const w={location:{latLng:{latitude:lat,longitude:lng}}};if(via)w.via=true;return w;
+}
+const ROUTES_FM='routes.description,routes.distanceMeters,routes.duration,routes.staticDuration,routes.polyline.encodedPolyline,routes.legs.distanceMeters,routes.legs.duration,routes.legs.staticDuration,routes.legs.startLocation,routes.legs.endLocation,routes.legs.steps.distanceMeters,routes.legs.steps.staticDuration,routes.legs.steps.navigationInstruction,routes.legs.steps.startLocation,routes.legs.steps.endLocation';
+function llFrom(loc){
+  const p=(loc&&loc.latLng)?loc.latLng:{latitude:0,longitude:0};
+  return new google.maps.LatLng(p.latitude,p.longitude);
+}
+// Routes APIレスポンス → 旧DirectionsRoute互換オブジェクト
+function adaptRoute(r){
+  const legs=(r.legs||[]).map(leg=>({
+    distance:{value:leg.distanceMeters||0},
+    duration:{value:durSec(leg.staticDuration||leg.duration)},
+    duration_in_traffic:leg.duration?{value:durSec(leg.duration)}:null,
+    start_location:llFrom(leg.startLocation),
+    end_location:llFrom(leg.endLocation),
+    steps:(leg.steps||[]).map(st=>({
+      instructions:(st.navigationInstruction&&st.navigationInstruction.instructions)||'',
+      distance:{value:st.distanceMeters||0},
+      duration:{value:durSec(st.staticDuration)},
+      start_location:llFrom(st.startLocation),
+      end_location:llFrom(st.endLocation)
+    }))
+  }));
+  return {
+    overview_path:(r.polyline&&r.polyline.encodedPolyline)?decodePolyline(r.polyline.encodedPolyline):[],
+    legs:legs,
+    summary:r.description||''
+  };
+}
+async function routesCompute(o,d,opts){
+  opts=opts||{};
+  const body={
+    origin:toRWp(o,false),
+    destination:toRWp(d,false),
+    travelMode:'DRIVE',
+    routingPreference:'TRAFFIC_AWARE',
+    computeAlternativeRoutes:!!opts.alternatives,
+    routeModifiers:{avoidTolls:!!opts.avoidTolls},
+    languageCode:'ja',
+    regionCode:'JP',
+    units:'METRIC'
+  };
+  const inter=(opts.intermediates||[]).map(w=>toRWp(w.loc!==undefined?w.loc:w.location,w.via)).filter(Boolean);
+  if(inter.length){body.intermediates=inter;body.computeAlternativeRoutes=false;}
+  if(opts.dep&&opts.dep.getTime()>Date.now()+60000)body.departureTime=opts.dep.toISOString();
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),20000);
+  let resp;
+  try{
+    resp=await fetch('https://routes.googleapis.com/directions/v2:computeRoutes',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Goog-Api-Key':getKey(),'X-Goog-FieldMask':ROUTES_FM},
+      body:JSON.stringify(body),
+      signal:ctrl.signal
+    });
+  }catch(e){
+    clearTimeout(t);
+    throw new Error('Routes APIへ接続できません（'+(e.name==='AbortError'?'20秒タイムアウト':e.message)+'）');
+  }
+  clearTimeout(t);
+  let data=null;
+  try{data=await resp.json();}catch(_){data=null;}
+  if(!resp.ok){
+    const em=(data&&data.error&&data.error.message)||('HTTP '+resp.status);
+    const st=(data&&data.error&&data.error.status)||'';
+    if(resp.status===403&&/SERVICE_DISABLED|has not been used|is disabled/i.test(em+' '+st)){
+      throw new Error('Routes APIが未有効です。Google Cloud Console→「APIとサービス」→「ライブラリ」で「Routes API」を検索して有効化してください。');
+    }
+    if(resp.status===403){
+      throw new Error('Routes APIアクセス拒否: '+em+' → APIキーの「APIの制限」にRoutes APIを追加、または課金設定をご確認ください。');
+    }
+    throw new Error('Routes APIエラー: '+em);
+  }
+  if(!data||!data.routes||!data.routes.length)throw new Error('ルートが見つかりませんでした。地点の指定を見直してください。');
+  return {routes:data.routes.map(adaptRoute)};
+}
+// 地名検索: Places API(New) → 失敗時は旧Geocoderへフォールバック
+async function placeSuggest(q){
+  try{
+    const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),8000);
+    const resp=await fetch('https://places.googleapis.com/v1/places:searchText',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Goog-Api-Key':getKey(),'X-Goog-FieldMask':'places.displayName,places.formattedAddress,places.location'},
+      body:JSON.stringify({textQuery:q,languageCode:'ja',regionCode:'JP'}),
+      signal:ctrl.signal
+    });
+    clearTimeout(t);
+    if(resp.ok){
+      const data=await resp.json();
+      if(data.places&&data.places.length){
+        return data.places.slice(0,5).map(p=>{
+          const nm=(p.displayName&&p.displayName.text)||'';
+          const ad=(p.formattedAddress||'').replace(/^日本、?/,'');
+          return {label:nm?(ad?nm+'（'+ad+'）':nm):ad,
+                  lat:p.location?p.location.latitude:null,
+                  lng:p.location?p.location.longitude:null};
+        });
+      }
+      return [];
+    }
+  }catch(_){/* 旧方式へ */}
+  return new Promise(resolve=>{
+    if(!geocoder){try{geocoder=new google.maps.Geocoder();}catch(e){return resolve([]);}}
+    let done=false;
+    const to=setTimeout(()=>{if(!done){done=true;resolve([]);}},8000);
+    try{
+      geocoder.geocode({address:q,region:'jp'},(res,st)=>{
+        if(done)return;done=true;clearTimeout(to);
+        if(st!=='OK'||!res)return resolve([]);
+        resolve(res.slice(0,5).map(r=>({
+          label:(r.formatted_address||'').replace(/^日本、?/,''),
+          lat:r.geometry?r.geometry.location.lat():null,
+          lng:r.geometry?r.geometry.location.lng():null
+        })));
+      });
+    }catch(_){if(!done){done=true;clearTimeout(to);resolve([]);}}
+  });
+}
+
 function getRoute(o,d,at,wps,depDate){
   wps=wps||[];
   const dep=(depDate&&depDate.getTime()>Date.now())?depDate:new Date();
-  return withTimeout(new Promise((res,rej)=>{
-    dirSvc.route({origin:o,destination:d,waypoints:wps,travelMode:google.maps.TravelMode.DRIVING,avoidTolls:at,provideRouteAlternatives:wps.length===0,region:'jp',drivingOptions:{departureTime:dep,trafficModel:google.maps.TrafficModel.BEST_GUESS}},(r,s)=>s==='OK'?res(r):rej(new Error(dirErrMsg(s))));
-  }),25000);
+  const inter=wps.map(w=>({loc:w.location,via:!w.stopover}));
+  // 新方式(Routes API)を第一候補、失敗時は旧Directionsに12秒だけ挑戦
+  return routesCompute(o,d,{alternatives:wps.length===0,avoidTolls:!!at,dep:dep,intermediates:inter})
+    .catch(err=>withTimeout(new Promise((res,rej)=>{
+      dirSvc.route({origin:o,destination:d,waypoints:wps,travelMode:google.maps.TravelMode.DRIVING,avoidTolls:at,provideRouteAlternatives:wps.length===0,region:'jp',drivingOptions:{departureTime:dep,trafficModel:google.maps.TrafficModel.BEST_GUESS}},(r,s)=>s==='OK'?res(r):rej(new Error(dirErrMsg(s))));
+    }),12000).catch(()=>{throw err;}));
 }
 
 // v5.1: ルート多様化 — 経路中間点から左右に直交オフセットした経由点を生成
@@ -1554,6 +1711,23 @@ async function apiSelfTest(){
   setStat('info','🔬 API自己診断を実行中...（最大40秒）');
   const out=[];
   const t10=(p)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('無応答(10秒タイムアウト)')),10000))]);
+  // ─ 新方式API（推奨） ─
+  try{
+    const rr=await routesCompute('東京駅','横浜駅',{alternatives:false,avoidTolls:false});
+    out.push(`Routes API(新・経路検索): ✅ 正常 (${rr.routes.length}ルート)`);
+  }catch(e){out.push(`Routes API(新・経路検索): ❌ ${e.message}`);}
+  try{
+    const ctrl=new AbortController();const tt=setTimeout(()=>ctrl.abort(),10000);
+    const resp=await fetch('https://places.googleapis.com/v1/places:searchText',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Goog-Api-Key':getKey(),'X-Goog-FieldMask':'places.displayName'},
+      body:JSON.stringify({textQuery:'東京駅',languageCode:'ja',regionCode:'JP'}),
+      signal:ctrl.signal});
+    clearTimeout(tt);
+    if(resp.ok){out.push('Places API New(新・地名検索): ✅ 正常');}
+    else{const j=await resp.json().catch(()=>null);out.push(`Places API New(新・地名検索): ❌ ${(j&&j.error&&j.error.message)||('HTTP '+resp.status)}`);}
+  }catch(e){out.push(`Places API New(新・地名検索): ❌ ${e.name==='AbortError'?'無応答(10秒)':e.message}`);}
+  // ─ 旧方式API（参考） ─
   // 0. ライブラリの存在確認
   out.push(`Maps JS本体: ${typeof google!=='undefined'&&google.maps?'✅ 読込済':'❌ 未読込'}`);
   out.push(`Placesライブラリ: ${typeof google!=='undefined'&&google.maps&&google.maps.places&&google.maps.places.Autocomplete?'✅ あり':'❌ なし'}`);
@@ -1730,12 +1904,17 @@ async function startSearch(){
 // ══════════════════════════════════════════════════════════════
 function routeViaWps(o,d,wps,viaPts,dep,avoidTolls){
   const depTime=(dep&&dep.getTime()>Date.now())?dep:new Date();
-  return withTimeout(new Promise((res,rej)=>dirSvc.route({
-    origin:o,destination:d,
-    waypoints:[...wps,...viaPts.map(p=>({location:p.loc,stopover:!!p.stop}))],
-    travelMode:google.maps.TravelMode.DRIVING,avoidTolls:!!avoidTolls,region:'jp',
-    drivingOptions:{departureTime:depTime,trafficModel:google.maps.TrafficModel.BEST_GUESS}
-  },(r,s)=>s==='OK'?res(r):rej(new Error(s)))),25000);
+  const inter=[
+    ...wps.map(w=>({loc:w.location,via:!w.stopover})),
+    ...viaPts.map(p=>({loc:p.loc,via:!p.stop}))
+  ];
+  return routesCompute(o,d,{alternatives:false,avoidTolls:!!avoidTolls,dep:depTime,intermediates:inter})
+    .catch(err=>withTimeout(new Promise((res,rej)=>dirSvc.route({
+      origin:o,destination:d,
+      waypoints:[...wps,...viaPts.map(p=>({location:p.loc,stopover:!!p.stop}))],
+      travelMode:google.maps.TravelMode.DRIVING,avoidTolls:!!avoidTolls,region:'jp',
+      drivingOptions:{departureTime:depTime,trafficModel:google.maps.TrafficModel.BEST_GUESS}
+    },(r,s)=>s==='OK'?res(r):rej(new Error(s)))),12000).catch(()=>{throw err;}));
 }
 function buildCand(rt,dr,ri,type,roadsLabel,sumLabel,icInfo,navWps,v,etc,day,ts){
   const dur=legsDur(rt.legs);
