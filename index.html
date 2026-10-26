@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v6.3</title>
+<title>ルートファインダー v6.4</title>
 <!-- v6.0: iPhoneホーム画面アプリ化（共有→ホーム画面に追加 で全画面アプリとして起動） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -306,6 +306,21 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   display:flex; align-items:center; justify-content:center; gap:6px;
 }
 .rc-nav:active { background:var(--green); color:#fff; }
+/* v6.4: 区間ナビ */
+.nav-legs { display:none; margin-top:8px; padding:8px 10px; background:rgba(0,0,0,.22); border-radius:8px; }
+.nl-sum { font-size:12px; font-weight:700; color:var(--green); margin-bottom:6px; line-height:1.6; }
+.nl-warn { font-size:10px; color:var(--orange); margin-bottom:4px; line-height:1.5; }
+.nl-row { padding:8px 0; border-top:1px solid rgba(45,74,94,.6); }
+.nl-t { font-size:12px; font-weight:700; color:var(--text); line-height:1.5; }
+.nl-s { font-size:10px; color:var(--text-dim); line-height:1.5; margin-bottom:6px; }
+.nl-ck { display:none; color:var(--green); font-size:10px; }
+.nl-row.done .nl-ck { display:inline; }
+.nl-row.done .nl-t { color:var(--text-dim); }
+.nl-go { width:100%; min-height:40px; border:1px solid rgba(76,175,80,.4); border-radius:7px; background:rgba(76,175,80,.12); color:var(--green); font-size:12px; font-weight:700; cursor:pointer; font-family:'Noto Sans JP',sans-serif; }
+.nl-go:active { background:var(--green); color:#fff; }
+.nl-note { font-size:9px; color:var(--text-muted); line-height:1.5; margin-top:4px; }
+.nl-law { font-size:9px; color:var(--orange); line-height:1.5; margin:8px 0 6px; padding-top:6px; border-top:1px solid rgba(45,74,94,.6); }
+.nl-all { width:100%; min-height:34px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--text-muted); font-size:10px; cursor:pointer; font-family:'Noto Sans JP',sans-serif; }
 .gen-rec { background:rgba(76,175,80,.1); border:1px solid rgba(76,175,80,.3); border-radius:var(--radius); padding:16px; text-align:center; }
 .gen-rec .ic { font-size:30px; margin-bottom:8px; }
 .gen-rec .mg { font-size:14px; font-weight:500; color:var(--green); }
@@ -419,7 +434,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v6.3</h1>
+      <h1>ルートファインダー v6.4</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -1816,6 +1831,273 @@ function openNav(idx,ev){
 }
 
 // ══════════════════════════════════════════════════════════════
+// v6.4: 区間ナビ
+// 長距離経路は、スマホのGoogleマップ経由点上限（3個）では別経路になりやすい。そこで経路を
+// 「有料区間の出口から500m先の一般道」と「ユーザー指定経由地」で区間に分け、区間ごとにGoogleマップへ渡す。
+// ==NAVSEG-START==
+const NAV_TOLL_EXIT_M=500;      // 有料区間の終点からこの距離だけ先（一般道側）に区切り点を置く
+const NAV_END_MARGIN_M=1000;    // 区間の始点・終点からこの距離以内には経由点を置かない
+const NAV_TOLL_MARGIN_M=1500;   // 有料区間の入口・出口手前この距離以内には経由点を置かない
+const NAV_USER_MAX_OFF_M=2000;  // ユーザー経由地が経路からこれ以上離れていれば区切りに使わない
+// 点(lat,lng)を経路(path)の線分へ投影（平面近似）。opts.s0/s1で累積距離の探索範囲を限定。返り値 {d離隔m, s累積距離m, lat, lng}
+function navProject(path,cum,lat,lng,opts){
+  opts=opts||{};
+  const n=path.length;if(n<2)return null;
+  const s0=opts.s0!=null?opts.s0:-Infinity,s1=opts.s1!=null?opts.s1:Infinity;
+  let lo=1,hi=n-1;
+  while(lo<hi){const mid=(lo+hi)>>1;if(cum[mid]>=s0)hi=mid;else lo=mid+1;}
+  const toR=Math.PI/180,ky=6371000*toR,kx=Math.cos(lat*toR)*ky;
+  let best=null;
+  for(let i=lo;i<n;i++){
+    if(cum[i-1]>s1)break;
+    const ax=(path[i-1].lng()-lng)*kx,ay=(path[i-1].lat()-lat)*ky,bx=(path[i].lng()-lng)*kx,by=(path[i].lat()-lat)*ky;
+    const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;
+    let t=L2>0?-(ax*dx+ay*dy)/L2:0;t=Math.max(0,Math.min(1,t));
+    const d=Math.hypot(ax+t*dx,ay+t*dy);
+    if(!best||d<best.d)best={d,s:cum[i-1]+t*(cum[i]-cum[i-1]),lat:path[i-1].lat()+t*(path[i].lat()-path[i-1].lat()),lng:path[i-1].lng()+t*(path[i].lng()-path[i-1].lng())};
+  }
+  return best;
+}
+// 経路に沿って累積距離sの位置を線形補間で返す
+function navPointAt(path,cum,s){
+  const n=path.length;s=Math.max(0,Math.min(cum[n-1],s));
+  let lo=1,hi=n-1;
+  while(lo<hi){const m=(lo+hi)>>1;if(cum[m]>=s)hi=m;else lo=m+1;}
+  const a=path[lo-1],b=path[lo],seg=cum[lo]-cum[lo-1],t=seg>0?(s-cum[lo-1])/seg:0;
+  return {s,lat:a.lat()+(b.lat()-a.lat())*t,lng:a.lng()+(b.lng()-a.lng())*t};
+}
+// 1区間[s0,s1]の経由点（累積距離m）を最大L個、進行順で返す。parts=区間内の有料部分[{x0,x1}]
+function navPickWpS(s0,s1,parts,L){
+  const len=s1-s0;
+  if(L<=0||len<=2*NAV_END_MARGIN_M)return [];
+  const minGap=Math.max(1000,len/(L*3));
+  const chosen=[];
+  const ok=s=>s>=s0+NAV_END_MARGIN_M-1e-6&&s<=s1-NAV_END_MARGIN_M+1e-6&&chosen.every(c=>Math.abs(c-s)>=minGap-0.5);
+  const add=s=>{if(chosen.length<L&&ok(s)){chosen.push(s);return true;}return false;};
+  // 優先1：有料部分（入口・出口から1.5km以上内側）に等間隔で最大2点
+  const p1=parts.map(p=>{const a=p.x0+NAV_TOLL_MARGIN_M,b=p.x1-NAV_TOLL_MARGIN_M;return b<=a?{a,b,n:0}:{a,b,n:(b-a)>=3*minGap?2:1};});
+  let tot=p1.reduce((x,p)=>x+p.n,0);
+  while(tot>L){let bi=-1;p1.forEach((p,i)=>{if(p.n>0&&(bi<0||p.n>=p1[bi].n))bi=i;});p1[bi].n--;tot--;}
+  p1.forEach(p=>{
+    if(p.n===2){add(p.a+(p.b-p.a)/3);add(p.a+(p.b-p.a)*2/3);}
+    else if(p.n===1)add((p.a+p.b)/2);
+  });
+  // 優先2：区間始点から最初の有料区間入口までの一般道が2km超ならその中間1点
+  if(parts.length){const g=parts[0].x0-s0;if(g>2000)add(s0+g/2);}
+  // 優先3：余りは区間全体を等間隔
+  const r=L-chosen.length;
+  if(r>0)for(const mult of [1,2,4]){const m=(r+1)*mult;for(let k=1;k<m&&chosen.length<L;k++)add(s0+len*k/m);}
+  return chosen.sort((a,b)=>a-b);
+}
+// 区間分割の計画（純粋関数）。tolls=[{sa,sb}]昇順, users=[{s,name,...}]。境界は一般道側にのみ置く
+function navPlanLegs(total,tolls,users,limit){
+  const inToll=s=>tolls.some(t=>s>=t.sa&&s<=t.sb);
+  const cand=[],dropped=[];
+  users.forEach(u=>{if(u.s>=300&&total-u.s>=300)cand.push({s:u.s,kind:'user',name:u.name,ref:u});else dropped.push(u);});
+  tolls.forEach(t=>{
+    const s=t.sb+NAV_TOLL_EXIT_M;
+    if(s<NAV_END_MARGIN_M||total-s<NAV_END_MARGIN_M)return; // 始点・終点に近すぎる
+    if(inToll(s))return;                                      // 次の有料区間の内側なら区切らない
+    cand.push({s,kind:'toll'});
+  });
+  cand.sort((a,b)=>a.s-b.s||(a.kind==='user'?-1:1));
+  const bounds=[];
+  cand.forEach(c=>{
+    let last=bounds[bounds.length-1];
+    if(c.kind==='toll'){if(last&&c.s-last.s<NAV_TOLL_EXIT_M)return;}
+    else{while(last&&last.kind==='toll'&&c.s-last.s<NAV_TOLL_EXIT_M){bounds.pop();last=bounds[bounds.length-1];}}
+    bounds.push(c);
+  });
+  const edges=[0].concat(bounds.map(b=>b.s),[total]);
+  const legs=[];
+  for(let k=0;k<edges.length-1;k++){
+    const s0=edges[k],s1=edges[k+1];
+    const parts=tolls.map(t=>({x0:Math.max(t.sa,s0),x1:Math.min(t.sb,s1)})).filter(p=>p.x1-p.x0>0);
+    legs.push({s0,s1,parts,tollM:parts.reduce((x,p)=>x+p.x1-p.x0,0),wpS:navPickWpS(s0,s1,parts,limit),end:k<bounds.length?bounds[k]:{kind:'dest'}});
+  }
+  return {legs,bounds,dropped};
+}
+// step列を経路全体の長さに合わせて累積距離化（step距離の総和とoverview_path長の差を吸収）
+function navStepsFlat(route,total){
+  const arr=[];
+  (route.legs||[]).forEach(l=>(l.steps||[]).forEach(st=>arr.push({
+    inst:String(st.instructions||'').replace(/<[^>]+>/g,' '),
+    dist:(st.distance&&st.distance.value)||0,
+    dur:(st.duration&&st.duration.value)||(st.staticDuration&&st.staticDuration.value)||0})));
+  const sum=arr.reduce((x,a)=>x+a.dist,0),sc=sum>0?total/sum:0;
+  let c=0;
+  arr.forEach(a=>{a.c0=c;c+=a.dist*sc;a.c1=c;});
+  return {steps:arr,sumDist:sum};
+}
+// 各区間の所要時間(秒)：stepの時間を距離比で区間に按分 → 交通考慮の総所要時間(trafficSec)に合わせて一律に補正
+function navLegSeconds(steps,sumDist,edges,trafficSec){
+  const n=edges.length-1,total=edges[n];
+  let raw=new Array(n).fill(0);
+  if(sumDist>0){
+    steps.forEach(st=>{
+      const len=st.c1-st.c0;
+      if(len<=0){let k=0;while(k<n-1&&st.c0>=edges[k+1])k++;raw[k]+=st.dur;return;}
+      for(let k=0;k<n;k++){const ov=Math.min(st.c1,edges[k+1])-Math.max(st.c0,edges[k]);if(ov>0)raw[k]+=st.dur*ov/len;}
+    });
+  }
+  const sum=raw.reduce((x,y)=>x+y,0);
+  if(!(trafficSec>0))return raw;
+  if(sum>0){const ratio=trafficSec/sum;return raw.map(x=>x*ratio);}
+  return edges.slice(0,n).map((e,k)=>trafficSec*(edges[k+1]-e)/total); // step時間が無い場合は距離比
+}
+// 表示用の分。丸めは表示時のみ。最終区間で端数調整し、各区間の分の和＝合計の分にする
+function navRoundMinutes(secs){
+  const T=Math.round(secs.reduce((x,y)=>x+y,0)/60);
+  const m=secs.map(x=>Math.round(x/60));
+  const last=T-m.slice(0,-1).reduce((x,y)=>x+y,0);
+  if(last>=0){m[m.length-1]=last;return {mins:m,totalMin:T};}
+  let acc=0,prev=0;
+  return {mins:secs.map(x=>{acc+=x;const r=Math.round(acc/60);const v=r-prev;prev=r;return v;}),totalMin:T};
+}
+function navFmtMin(min){const h=Math.floor(min/60),m=min%60;return h>0?`${h}時間${m}分`:`${m}分`;}
+function navFmtKm(m){return m>=10000?String(Math.round(m/1000)):(m/1000).toFixed(1);}
+function navStopsCtx(){
+  const locStr=s=>s.place&&s.place.geometry?`${s.place.geometry.location.lat()},${s.place.geometry.location.lng()}`:s.v;
+  const userStops=stops.slice(1,-1).filter(s=>locStr(s)).map((s,i)=>{
+    const g=s.place&&s.place.geometry?s.place.geometry.location:null;
+    return {name:((s.v||'').trim()||('経由地'+(i+1))),lat:g?g.lat():null,lng:g?g.lng():null};
+  });
+  return {limit:NAV_WP_LIMIT(),originStr:locStr(stops[0]),destStr:locStr(stops[stops.length-1]),userStops,totalSec:0};
+}
+function navLegUrl(k,destStr,wps,originStr){
+  const enc=encodeURIComponent;
+  let url='https://www.google.com/maps/dir/?api=1';
+  if(k===0)url+=`&origin=${enc(originStr)}`; // 区間2以降は出発地を付けない（Googleマップが現在地を出発地にする）
+  url+=`&destination=${enc(destStr)}&travelmode=driving&dir_action=navigate`;
+  if(wps.length)url+=`&waypoints=${wps.map(enc).join('%7C')}`;
+  return url;
+}
+// 選択経路を区間に分け、各区間のGoogleマップURL・ラベル・所要時間を返す。失敗時はnull
+function buildNavLegs(route,ctx){
+  ctx=ctx||navStopsCtx();
+  const path=(route&&route.overview_path)||[];
+  if(path.length<3)return null;
+  const cum=navCumDist(path),total=cum[cum.length-1];
+  if(!(total>0))return null;
+  const limit=ctx.limit||NAV_WP_LIMIT();
+  const warnings=[];
+  // 1) 有料区間 → 経路上の累積距離の範囲
+  const tolls=[];let prevB=0;
+  getTollSegments(route).forEach(sg=>{
+    const pa=navProject(path,cum,sg.start.lat(),sg.start.lng(),{s0:prevB});if(!pa)return;
+    const pb=navProject(path,cum,sg.end.lat(),sg.end.lng(),{s0:pa.s});
+    if(!pb||pb.s<=pa.s+100)return;
+    tolls.push({sa:pa.s,sb:pb.s});prevB=pb.s;
+  });
+  // 2) ユーザー経由地 → 経路上の最寄り点
+  const users=[];let prevU=0;
+  (ctx.userStops||[]).forEach(u=>{
+    if(u.lat==null||u.lng==null){warnings.push(`経由地『${u.name}』は位置が不明のため、区間の区切りに使えませんでした。`);return;}
+    let p=navProject(path,cum,u.lat,u.lng,{s0:prevU});
+    if(!p||p.d>NAV_USER_MAX_OFF_M)p=navProject(path,cum,u.lat,u.lng);
+    if(!p||p.d>NAV_USER_MAX_OFF_M){warnings.push(`経由地『${u.name}』は選択経路から約${navFmtKm(p?p.d:0)}km離れているため、区間の区切りに使えませんでした。`);return;}
+    prevU=p.s;
+    users.push({s:p.s,name:u.name,lat:u.lat,lng:u.lng,inToll:tolls.some(t=>p.s>=t.sa&&p.s<=t.sb)});
+  });
+  const plan=navPlanLegs(total,tolls,users,limit);
+  plan.dropped.forEach(u=>warnings.push(`経由地『${u.name}』は出発地または目的地に近すぎるため、区間の区切りに使えませんでした。`));
+  plan.bounds.forEach(b=>{if(b.kind==='user'&&b.ref.inToll)warnings.push(`経由地『${b.name}』は有料道路の区間内にあるため、その区間の終点が高速上になる可能性があります。`);});
+  // 3) 所要時間（stepを距離比で按分し、交通考慮の総所要時間に合わせる）
+  const fl=navStepsFlat(route,total);
+  const edges=[0].concat(plan.bounds.map(b=>b.s),[total]);
+  const totalSec=ctx.totalSec>0?ctx.totalSec:(route.legs?legsDur(route.legs):0);
+  const secs=navLegSeconds(fl.steps,fl.sumDist,edges,totalSec);
+  const rm=totalSec>0?navRoundMinutes(secs):null;
+  // 4) 区間ごとの組み立て
+  const legs=plan.legs.map((lg,k)=>{
+    const wps=lg.wpS.map(s=>{const p=navPointAt(path,cum,s);return {s,lat:p.lat,lng:p.lng,str:`${p.lat.toFixed(6)},${p.lng.toFixed(6)}`};});
+    let destStr,end;
+    if(lg.end.kind==='dest'){destStr=ctx.destStr;end={kind:'dest'};}
+    else if(lg.end.kind==='user'){const u=lg.end.ref;destStr=`${u.lat.toFixed(6)},${u.lng.toFixed(6)}`;end={kind:'user',name:u.name};}
+    else{const p=navPointAt(path,cum,lg.s1);destStr=`${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;end={kind:'toll'};}
+    // 道路名：区間内の有料部分に重なるstepから、exRoadsと同じ正規表現で抽出
+    let roads=[];
+    if(lg.parts.length){
+      const seen=new Set();
+      fl.steps.forEach(st=>{
+        if(!lg.parts.some(p=>st.c1>p.x0-500&&st.c0<p.x1+500))return;
+        for(const kw of TKWS){
+          if(st.inst.includes(kw)){
+            const m=st.inst.match(/([一-鿿぀-ヿA-Za-z0-9ー]+(?:高速道路|高速|自動車道|有料道路|Expwy))/);
+            const nm=m?m[1]:kw;if(!seen.has(nm)){seen.add(nm);roads.push(nm);}
+            break;
+          }
+        }
+      });
+      if(!roads.length)roads=['有料道路'];
+    }
+    const lenM=lg.s1-lg.s0;
+    const min=rm?rm.mins[k]:null;
+    const head=`区間${k+1}：約${navFmtKm(lenM)}km`+(min!=null?`・約${navFmtMin(min)}`:'');
+    const tollTxt=lg.parts.length?`（${roads.join('・')} ${navFmtKm(lg.tollM)}km 利用）`:'';
+    const endTxt=end.kind==='toll'?'→ 高速を降りた先の一般道で区切り':end.kind==='user'?`→ 経由地『${end.name}』`:'→ 目的地';
+    return {k,s0:lg.s0,s1:lg.s1,lenM,sec:secs[k],min,wps,url:navLegUrl(k,destStr,wps.map(w=>w.str),ctx.originStr),
+      head,tollTxt,endTxt,label:head+tollTxt+' '+endTxt,roads,tollM:lg.tollM,end,destStr};
+  });
+  return {legs,warnings,total,totalSec,totalMin:rm?rm.totalMin:null,tolls,limit};
+}
+// ==NAVSEG-END==
+
+// ── 区間ナビ UI ──
+function navRouteKey(route){
+  const p=route.overview_path,a=p[0],b=p[p.length-1];
+  return `${p.length}|${a.lat().toFixed(5)},${a.lng().toFixed(5)}|${b.lat().toFixed(5)},${b.lng().toFixed(5)}`;
+}
+function getNavLegs(i){
+  window._navLegs=window._navLegs||{};
+  if(window._navLegs[i]!==undefined)return window._navLegs[i];
+  let res=null;
+  try{
+    const r=window._sr&&window._sr[i];
+    const route=r&&r.dr&&r.dr.routes?r.dr.routes[r.ri||0]:null;
+    if(route){const ctx=navStopsCtx();ctx.totalSec=r.dur||0;res=buildNavLegs(route,ctx);if(res)res.key=navRouteKey(route);}
+  }catch(e){console.error('区間ナビの作成に失敗',e);res=null;}
+  window._navLegs[i]=res;
+  return res;
+}
+window._navDone=window._navDone||{};
+function navLegsHtml(i){
+  const nl=getNavLegs(i);if(!nl)return '';
+  let h=`<div class="nl-sum">🧭 区間ナビ：${nl.legs.length}区間`+(nl.totalMin!=null?` / 所要時間合計 約${navFmtMin(nl.totalMin)}（各区間の合計）`:'')+'</div>';
+  nl.warnings.forEach(w=>{h+=`<div class="nl-warn">⚠ ${escHTML(w)}</div>`;});
+  nl.legs.forEach(lg=>{
+    const done=!!window._navDone[nl.key+':'+lg.k];
+    h+=`<div class="nl-row${done?' done':''}" id="nlr${i}_${lg.k}">
+      <div class="nl-t">${escHTML(lg.head)}<span class="nl-ck"> ✓ 案内済み</span></div>
+      <div class="nl-s">${escHTML((lg.tollTxt?lg.tollTxt+' ':'')+lg.endTxt)}（経由点${lg.wps.length}個）</div>
+      <button class="nl-go" onclick="openNavLeg(${i},${lg.k},event)">この区間をナビ</button>
+      <div class="nl-note">区間の終わりでGoogleマップの案内が終了します。次の区間ボタンは停車中または同乗者が操作してください</div>
+    </div>`;
+  });
+  h+='<div class="nl-law">運転中にスマートフォンを手に持って操作・注視することは道路交通法で禁止されています。停車中に操作するか、固定ホルダーで使用してください。</div>';
+  h+=`<button class="nl-all" onclick="openNav(${i},event)">全体を一括でナビ（経由点が足りず別経路になる場合あり）</button>`;
+  return h;
+}
+function toggleNavLegs(i,ev){
+  if(ev)ev.stopPropagation();
+  const box=document.getElementById('navLegs'+i);if(!box)return;
+  if(box.style.display==='block'){box.style.display='none';return;}
+  box.innerHTML=navLegsHtml(i);
+  box.style.display='block';
+}
+function openNavLeg(i,k,ev){
+  if(ev)ev.stopPropagation();
+  const nl=getNavLegs(i);if(!nl||!nl.legs[k])return;
+  const lg=nl.legs[k];
+  window.open(lg.url,'_blank','noopener');
+  window._navDone[nl.key+':'+k]=true;
+  const row=document.getElementById(`nlr${i}_${k}`);if(row)row.classList.add('done');
+  let msg=`区間${k+1}/${nl.legs.length}をGoogleマップへ渡しました（経由点${lg.wps.length}個）。`;
+  if(k>0)msg+='<br>この区間は現在地が出発地になります。Googleマップの位置情報を有効にしてください。';
+  try{setStat('info',msg);}catch(_){}
+}
+
+// ══════════════════════════════════════════════════════════════
 // SEARCH（Phase 1: 一般道基準）
 // ══════════════════════════════════════════════════════════════
 // v5.9.1: API自己診断 — 各Googleサービスを個別テストしてどれが壊れているか特定
@@ -2606,6 +2888,7 @@ function displayResults(res,filteredOut){
       ${filteredOut>0?`<br><span style="color:var(--orange)">⚠ 予算超過のため${filteredOut}件を除外</span>`:''}
     </div>`;
 
+  window._sr=res;window._navLegs={}; // v6.4: 区間ナビの計算結果は候補ごとにキャッシュ
   res.forEach((r,i)=>{
     const rkLabel=['1位','2位','3位','4位','5位'][i];
     const db=r.disc?.name?`<span class="disc-badge ${r.disc.cls||''}">${r.disc.name}</span>`:'';
@@ -2627,6 +2910,10 @@ function displayResults(res,filteredOut){
         +((r.segInfo&&r.segInfo.length>=2)?'<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(45,74,94,.5);color:var(--text-muted);font-size:10px">区間内訳: '+r.segInfo.map((g,gi)=>`第${gi+1}区間 約${g.km}km`).join(' / ')+'</div>':'')
         +'</div>';
     }
+    const nl=getNavLegs(i);
+    const navBtn=(nl&&nl.legs.length)
+      ?`<button class="rc-nav" onclick="toggleNavLegs(${i},event)">🧭 区間ナビ（${nl.legs.length}区間）</button>`
+      :`<button class="rc-nav" onclick="openNav(${i},event)">🧭 Googleマップでナビ開始</button>`;
     h+=`<div class="rc" onclick="showRoute(${i})" data-i="${i}" title="タップで地図に経路表示">
       <div style="position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px;background:${RCOLORS[i]||'#42a5f5'}"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:6px;flex-wrap:wrap">
@@ -2654,8 +2941,9 @@ function displayResults(res,filteredOut){
       </div>
       ${icHtml}
       <div class="rc-actions">
-        <button class="rc-nav" onclick="openNav(${i},event)">🧭 Googleマップでナビ開始</button>
+        ${navBtn}
       </div>
+      <div class="nav-legs" id="navLegs${i}" onclick="event.stopPropagation()"></div>
     </div>`;
   });
   h+='</div>';
