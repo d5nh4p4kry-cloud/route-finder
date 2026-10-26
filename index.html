@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v6.2</title>
+<title>ルートファインダー v6.3</title>
 <!-- v6.0: iPhoneホーム画面アプリ化（共有→ホーム画面に追加 で全画面アプリとして起動） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -419,7 +419,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v6.2</h1>
+      <h1>ルートファインダー v6.3</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -1719,26 +1719,100 @@ function applyHashParams(){
 // ══════════════════════════════════════════════════════════════
 // Googleマップ ナビ連携
 // ══════════════════════════════════════════════════════════════
-function gmapUrl(navWps){
+// v6.3: 選択した経路をGoogleマップで再現するための経由点を、選択経路の実際の線形（overview_path）上から選ぶ。
+// 旧方式の不具合：①Routes APIの代替経路候補は経由点ゼロで渡していた ②IC候補は概算IC座標（最大±2km、経路外）を渡していた
+// ③利用者指定の経由地の後ろにIC座標を付け足し進行順が崩れていた ④スマホブラウザは経由点3個までの制限を考慮していなかった
+// 公式（Maps URLs, 2026-10-23更新）：モバイルブラウザは経由点3個まで、それ以外は9個まで。
+const NAV_WP_LIMIT=()=>/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)?3:9;
+function navCumDist(path){
+  const cum=[0];
+  for(let i=1;i<path.length;i++)cum.push(cum[i-1]+haverD(path[i-1],path[i]));
+  return cum;
+}
+function navNearestIdx(path,ll){
+  let best=0,bd=Infinity;
+  for(let i=0;i<path.length;i++){const d=haverD(path[i],ll);if(d<bd){bd=d;best=i;}}
+  return best;
+}
+function navIdxAtDist(cum,target){
+  let i=0;while(i<cum.length-1&&cum[i]<target)i++;return i;
+}
+// 選択経路上の誘導点（path上の頂点インデックス）を優先度順に返す
+function navAnchorIdx(route){
+  const path=route.overview_path||[];
+  if(path.length<3)return {path,cum:[0],picks:[]};
+  const cum=navCumDist(path),total=cum[cum.length-1];
+  const picks=[];
+  const segs=getTollSegments(route).map(s=>({a:navNearestIdx(path,s.start),b:navNearestIdx(path,s.end)})).filter(s=>s.b>s.a).sort((x,y)=>x.a-y.a);
+  // 優先1：各有料区間の中間点（入口・出口ランプから離れた本線上。この道路を必ず使わせる）
+  segs.forEach(s=>picks.push({idx:navIdxAtDist(cum,(cum[s.a]+cum[s.b])/2),why:'有料区間'}));
+  // 優先2：有料区間どうしの間（乗り直しの一般道区間）の中間点
+  for(let k=0;k+1<segs.length;k++){
+    const g0=segs[k].b,g1=segs[k+1].a;
+    if(cum[g1]-cum[g0]>500)picks.push({idx:navIdxAtDist(cum,(cum[g0]+cum[g1])/2),why:'乗り直し区間'});
+  }
+  // 優先3：出発〜最初の有料区間、最後の有料区間〜目的地の一般道区間の中間点
+  if(segs.length){
+    if(cum[segs[0].a]>2000)picks.push({idx:navIdxAtDist(cum,cum[segs[0].a]/2),why:'一般道区間'});
+    const last=segs[segs.length-1].b;
+    if(total-cum[last]>2000)picks.push({idx:navIdxAtDist(cum,(cum[last]+total)/2),why:'一般道区間'});
+  }
+  // 優先4：経路全体を等間隔に（上記で埋まらない枠用）
+  for(let q=1;q<=8;q++)picks.push({idx:navIdxAtDist(cum,total*q/9),why:'経路形状'});
+  return {path,cum,picks};
+}
+function gmapUrl(route){
   const enc=s=>encodeURIComponent(s);
   const oS=stops[0],dS=stops[stops.length-1];
   const locStr=s=>s.place?.geometry?`${s.place.geometry.location.lat()},${s.place.geometry.location.lng()}`:s.v;
   // dir_action=navigate: モバイルのGoogleマップアプリでターンバイターン案内を即開始
   let url=`https://www.google.com/maps/dir/?api=1&origin=${enc(locStr(oS))}&destination=${enc(locStr(dS))}&travelmode=driving&dir_action=navigate`;
-  const userWps=stops.slice(1,-1).map(locStr).filter(Boolean);
-  const all=[...userWps,...(navWps||[])];
-  if(all.length)url+=`&waypoints=${all.map(enc).join('%7C')}`;
-  return url;
+  const limit=NAV_WP_LIMIT();
+  const userStops=stops.slice(1,-1).filter(s=>locStr(s));
+  const info={limit,user:userStops.length,auto:0,over:false};
+  let items=[];
+  if(route&&route.overview_path&&route.overview_path.length>2){
+    const {path,cum,picks}=navAnchorIdx(route);
+    // 利用者指定の経由地は必ず残し、経路上の位置で並べる
+    userStops.forEach(s=>{
+      const g=s.place&&s.place.geometry?s.place.geometry.location:null;
+      items.push({idx:g?navNearestIdx(path,g):-1,str:locStr(s),user:true});
+    });
+    const room=Math.max(0,limit-items.length);
+    const minGap=Math.max(1500,cum[cum.length-1]/(limit*3)); // 経由点の詰まりすぎ防止。乗り直し区間の点を弾かない程度に緩く
+    const chosen=[];
+    for(const p of picks){
+      if(chosen.length>=room)break;
+      const d=cum[p.idx];
+      if(d<1000||cum[cum.length-1]-d<1000)continue;
+      if(items.concat(chosen).some(c=>c.idx>=0&&Math.abs(cum[c.idx]-d)<minGap))continue;
+      chosen.push({idx:p.idx,str:`${path[p.idx].lat().toFixed(6)},${path[p.idx].lng().toFixed(6)}`,user:false});
+    }
+    info.auto=chosen.length;
+    items=items.concat(chosen);
+    // 位置不明の利用者経由地（-1）は元の順序を保つため、位置の分かるものだけ進行順に並べ替え
+    if(items.every(c=>c.idx>=0))items.sort((a,b)=>a.idx-b.idx);
+  }else{
+    items=userStops.map(s=>({idx:-1,str:locStr(s),user:true}));
+  }
+  if(items.filter(c=>c.user).length>limit)info.over=true;
+  const wps=items.slice(0,limit).map(c=>c.str);
+  if(wps.length)url+=`&waypoints=${wps.map(enc).join('%7C')}`;
+  return {url,info};
 }
 function openNav(idx,ev){
   if(ev)ev.stopPropagation();
-  let navWps=[];
+  let route=null;
   if(idx!==null&&window._sr&&window._sr[idx]){
     const r=window._sr[idx];
-    if(r.navWps&&r.navWps.length)navWps=r.navWps;
+    route=r.dr&&r.dr.routes?r.dr.routes[r.ri||0]:null;
   }
-  const url=gmapUrl(navWps);
+  const {url,info}=gmapUrl(route);
   window.open(url,'_blank','noopener');
+  let msg=`Googleマップへ、選択した経路の線上から経由点${info.auto}個`+(info.user?`とご指定の経由地${info.user}件`:'')+`を渡しました（この端末の上限は合計${info.limit}個）。`;
+  if(info.over)msg+='<br>⚠ ご指定の経由地が上限を超えているため、一部をGoogleマップへ渡せていません。';
+  msg+='<br><span style="font-size:10px">※Googleマップは渡された経由点の間を独自に再計算するため、細部が異なる場合があります。Googleマップの経路オプションで「有料道路を使用しない」「高速道路を使用しない」がオンだと高速を避けます。</span>';
+  try{setStat('info',msg);}catch(_){}
 }
 
 // ══════════════════════════════════════════════════════════════
