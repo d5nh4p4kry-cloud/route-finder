@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v6.1</title>
+<title>ルートファインダー v6.2</title>
 <!-- v6.0: iPhoneホーム画面アプリ化（共有→ホーム画面に追加 で全画面アプリとして起動） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -373,6 +373,43 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
 .hist-item-del { flex-shrink:0; width:28px; height:28px; border:none; background:transparent; color:var(--text-muted); font-size:14px; cursor:pointer; border-radius:5px; display:flex; align-items:center; justify-content:center; }
 .hist-item-del:active { background:rgba(239,83,80,.2); color:var(--red); }
 .hist-empty { padding:16px; text-align:center; font-size:12px; color:var(--text-muted); }
+/* v6.2: 実証テスト パネル */
+.pf-ov { position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,.72); display:none; align-items:stretch; justify-content:center; }
+.pf-box { background:var(--bg-panel); color:var(--text); width:100%; max-width:720px; display:flex; flex-direction:column; border-left:1px solid var(--border); border-right:1px solid var(--border); }
+.pf-top { display:flex; align-items:center; justify-content:space-between; padding:calc(10px + var(--safe-top)) 14px 10px; border-bottom:1px solid var(--border); font-size:14px; }
+.pf-x { border:none; background:transparent; color:var(--text-dim); font-size:20px; min-width:44px; min-height:44px; cursor:pointer; }
+.pf-body { flex:1; overflow-y:auto; padding:12px 14px calc(24px + var(--safe-bottom)); -webkit-overflow-scrolling:touch; }
+.pf-warn { background:rgba(255,152,0,.1); border:1px solid rgba(255,152,0,.35); color:var(--orange); border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.7; word-break:break-all; }
+.pf-prog { font-size:12px; color:var(--blue); padding:10px 2px; min-height:20px; line-height:1.5; }
+.pf-btns { display:flex; gap:8px; margin-bottom:10px; }
+.pf-btn { flex:1; min-height:44px; border-radius:9px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.pf-btn:disabled { opacity:.4; cursor:not-allowed; }
+.pf-manual { width:100%; height:140px; margin-bottom:10px; background:var(--bg-input); color:var(--text); border:1px solid var(--border); border-radius:8px; font-size:11px; padding:8px; }
+.pf-card { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:10px; font-size:12px; line-height:1.6; }
+.pf-ch { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.pf-id { font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--accent); }
+.pf-ct { flex:1; min-width:140px; font-weight:700; }
+.pf-badge { font-size:11px; font-weight:700; padding:2px 9px; border-radius:10px; white-space:nowrap; }
+.pf-free { background:rgba(76,175,80,.18); color:var(--green); }
+.pf-paid { background:rgba(66,165,245,.18); color:var(--blue); }
+.pf-unk { background:rgba(255,152,0,.18); color:var(--orange); }
+.pf-ng { background:rgba(239,83,80,.18); color:var(--red); }
+.pf-meta { color:var(--text-dim); margin-top:4px; }
+.pf-head { margin-top:4px; font-weight:700; }
+.pf-err { margin-top:6px; padding:6px 8px; border-radius:6px; background:rgba(239,83,80,.1); color:var(--red); word-break:break-all; white-space:pre-wrap; }
+.pf-lines, .pf-notes { margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:10.5px; word-break:break-all; }
+.pf-lines { color:var(--text); }
+.pf-notes { color:var(--text-muted); }
+.pf-steps { margin-top:8px; }
+.pf-steps summary { cursor:pointer; color:var(--accent); min-height:28px; }
+.pf-steps ol { padding-left:26px; max-height:360px; overflow-y:auto; margin-top:4px; }
+.pf-steps li { padding:1px 0; }
+.pf-steps li.pf-hit { color:var(--orange); font-weight:700; }
+.pf-d { color:var(--text-muted); font-size:10px; }
+.pf-ref { margin-top:14px; padding:10px 12px; border:1px dashed var(--border); border-radius:8px; font-size:12px; line-height:1.7; }
+.pf-ref ol { padding-left:20px; margin-top:4px; }
+.pf-ref code { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent); word-break:break-all; }
+.pf-dim { color:var(--text-muted); font-size:11px; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -382,7 +419,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v6.1</h1>
+      <h1>ルートファインダー v6.2</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -503,6 +540,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
       </select>
       <button class="btn btn-p" id="searchBtn" disabled onclick="startSearch()" style="margin-top:6px">ルート検索開始</button>
       <button class="btn" onclick="apiSelfTest()" style="margin-top:8px;width:100%;font-size:11px;padding:8px;background:rgba(171,71,188,.12);border:1px solid rgba(171,71,188,.4);color:#ce93d8">🔬 API自己診断（不具合時にお使いください）</button>
+      <button class="btn" onclick="apiProofTest()" style="margin-top:6px;width:100%;font-size:11px;padding:8px;background:rgba(0,188,212,.10);border:1px solid rgba(0,188,212,.4);color:var(--accent)">🧪 料金・経路 実証テスト（Routes検証・高単価APIを最大7回）</button>
     </div>
 
     <!-- 一般道情報 -->
@@ -1753,6 +1791,372 @@ async function apiSelfTest(){
     out.push('Directions(渋滞予測付き): ✅ 正常');
   }catch(e){out.push(`Directions(渋滞予測付き): ❌ ${e.message}`);}
   setStat('info',`🔬 <strong>API自己診断結果</strong><br><span style="font-size:11px;line-height:2">${out.join('<br>')}</span><br><span style="font-size:10px;color:var(--text-dim)">この結果を開発者に伝えてください。</span>`);
+}
+
+// ══════════════════════════════════════════════════════════════
+// v6.2: 🧪 料金・経路 実証テスト（追加のみ。既存の検索ロジックには非干渉）
+// 固定5地点でGoogle Routesの料金(ETC)・経路応答を実機検証する。
+// 送信回数: REST 3 + JS 3 + 経由点 1 = 最大7回（料金計算付き＝高単価SKU）
+// ══════════════════════════════════════════════════════════════
+const PF_PTS={
+  P1:{n:'新百合ヶ丘駅',lat:35.6036,lng:139.5076},
+  P2:{n:'厚木IC付近',lat:35.4457,lng:139.3660},
+  P3:{n:'用賀出入口付近',lat:35.6266,lng:139.6339},
+  P4:{n:'霞が関出入口付近',lat:35.6728,lng:139.7485},
+  P5:{n:'白河IC付近',lat:37.1607,lng:140.1980}
+};
+const PF_SEGS=[['1','P1','P2'],['2','P3','P4'],['3','P1','P5']];
+const PF_VIA=[{n:'浦和付近',lat:35.8370,lng:139.7110},{n:'宇都宮付近',lat:36.6480,lng:139.8330}];
+const PF_FM='routes.duration,routes.staticDuration,routes.distanceMeters,routes.travelAdvisory.tollInfo,routes.legs.travelAdvisory.tollInfo,routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,fallbackInfo';
+const PF_STATUS={
+  free:{t:'無料',c:'pf-free'},
+  paid:{t:'料金あり',c:'pf-paid'},
+  unknown:{t:'有料・金額不明',c:'pf-unk'},
+  unverified:{t:'未検証',c:'pf-ng'}
+};
+const PF={running:false,results:[],startedAt:null,finished:false};
+
+// APIキー文字列が結果に混入しないよう必ず通す
+function pfScrub(s){
+  let t=String(s==null?'':s);
+  const k=getKey();
+  if(k)t=t.split(k).join('[APIキー省略]');
+  return t.replace(/AIza[0-9A-Za-z_-]{20,}/g,'[APIキー省略]');
+}
+function pfJson(o){try{return pfScrub(JSON.stringify(o));}catch(e){return pfScrub(String(o));}}
+function pfKeys(o){
+  if(o==null||typeof o!=='object')return [];
+  const s=new Set(Object.keys(o));
+  try{
+    const pr=Object.getPrototypeOf(o);
+    if(pr&&pr!==Object.prototype)Object.getOwnPropertyNames(pr).forEach(k=>{if(k!=='constructor')s.add(k);});
+  }catch(e){/* noop */}
+  return Array.from(s);
+}
+function pfTimeout(ms,label){
+  return new Promise((_,rej)=>setTimeout(()=>rej(new Error((label||'')+(ms/1000)+'秒タイムアウト')),ms));
+}
+// Money({currencyCode, units, nanos}) → {text, jpy}
+function pfMoney(m){
+  if(m==null||typeof m!=='object')return {text:pfJson(m),jpy:false};
+  // Money型は値がゼロの units / nanos を省略するため、通貨コードがあれば省略分は0として扱う（省略＝金額不明ではない）
+  if(!m.currencyCode)return {text:pfJson(m),jpy:false};
+  const omitted=(m.units===undefined||m.units===null)&&(m.nanos===undefined||m.nanos===null);
+  const v=(Number(m.units)||0)+(Number(m.nanos)||0)/1e9;
+  if(omitted&&m.currencyCode==='JPY')return {text:'¥0（units・nanos省略＝0として判定） raw='+pfJson(m),jpy:true,val:0};
+  if(m.currencyCode==='JPY'){
+    const s=Number.isInteger(v)?v.toLocaleString('ja-JP'):String(v);
+    return {text:'¥'+s,jpy:true,val:v};
+  }
+  return {text:m.currencyCode+' '+v,jpy:false};
+}
+// TollInfo → Money配列（REST: estimatedPrice / JS: estimatedPrices の両方に対応）
+function pfTollAmounts(ti){
+  let a=ti.estimatedPrices!==undefined?ti.estimatedPrices:ti.estimatedPrice;
+  if(a==null)return [];
+  if(!Array.isArray(a))a=[a];
+  return a.map(pfMoney);
+}
+// route(REST/JS共通形) → 料金4状態の判定
+function pfJudge(route){
+  const items=[];
+  const chk=(where,adv)=>{
+    const ti=adv?adv.tollInfo:undefined;
+    if(ti===undefined||ti===null)return;
+    items.push({where:where,am:pfTollAmounts(ti),raw:pfJson(ti)});
+  };
+  chk('route',route.travelAdvisory);
+  (route.legs||[]).forEach((lg,i)=>chk('leg'+(i+1),lg?lg.travelAdvisory:null));
+  let status='free';
+  if(items.length){
+    status=items.some(it=>it.am.some(a=>a.jpy))?'paid':'unknown';
+  }
+  // 代表値: route直下のJPY金額、無ければlegのJPY金額合計
+  let head=null;
+  const rt=items.find(it=>it.where==='route');
+  const rj=rt?rt.am.find(a=>a.jpy):null;
+  if(rj)head=rj.text+'（route）';
+  else{
+    const ls=items.filter(it=>it.where!=='route').map(it=>it.am.find(a=>a.jpy)).filter(Boolean);
+    if(ls.length)head='¥'+ls.reduce((s,a)=>s+a.val,0).toLocaleString('ja-JP')+'（leg合計）';
+  }
+  const lines=items.map(it=>{
+    const am=it.am.length?it.am.map(a=>a.text).join(' / '):'金額配列なし';
+    return it.where+': tollInfoあり → '+am+'  [tollInfo='+it.raw+']';
+  });
+  if(!items.length)lines.push('route・全legにtollInfoなし');
+  return {status:status,head:head,lines:lines};
+}
+function pfNewRec(id,kind,title){
+  return {id:id,kind:kind,title:title,status:'unverified',http:null,min:null,staticMin:null,km:null,fallback:null,head:null,lines:[],notes:[],error:null,steps:null};
+}
+function pfFail(rec,msg){rec.status='unverified';rec.error=pfScrub(msg);return rec;}
+
+// ── REST呼出し ──
+async function pfRestCall(o,d,via){
+  const ll=p=>({location:{latLng:{latitude:p.lat,longitude:p.lng}}});
+  const body={
+    origin:ll(o),destination:ll(d),
+    travelMode:'DRIVE',
+    routingPreference:'TRAFFIC_AWARE_OPTIMAL',
+    extraComputations:['TOLLS'],
+    routeModifiers:{vehicleInfo:{emissionType:'GASOLINE'},tollPasses:['JP_ETC']},
+    languageCode:'ja',regionCode:'JP',units:'METRIC'
+  };
+  if(via&&via.length)body.intermediates=via.map(p=>{const w=ll(p);w.via=true;return w;});
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),20000);
+  let resp,text;
+  try{
+    resp=await fetch('https://routes.googleapis.com/directions/v2:computeRoutes',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Goog-Api-Key':getKey(),'X-Goog-FieldMask':PF_FM},
+      body:JSON.stringify(body),
+      signal:ctrl.signal
+    });
+    text=await resp.text();
+  }catch(e){
+    clearTimeout(t);
+    throw new Error(e.name==='AbortError'?'20秒タイムアウト':('接続できません: '+e.message));
+  }
+  clearTimeout(t);
+  let json=null;
+  try{json=JSON.parse(text);}catch(e){/* 非JSON */}
+  return {http:resp.status,ok:resp.ok,json:json,text:text};
+}
+async function pfRunRest(id,title,o,d,via){
+  const rec=pfNewRec(id,'REST',title);
+  let r;
+  try{r=await pfRestCall(o,d,via);}
+  catch(e){return pfFail(rec,e.message);}
+  rec.http=r.http;
+  if(!r.ok){
+    const em=(r.json&&r.json.error)?((r.json.error.status||'')+' '+(r.json.error.message||'')).trim():String(r.text).slice(0,500);
+    return pfFail(rec,'HTTP '+r.http+': '+em);
+  }
+  const j=r.json;
+  if(!j||typeof j!=='object')return pfFail(rec,'HTTP 200 だがJSONとして解釈できない: '+String(r.text).slice(0,300));
+  rec.notes.push('応答トップキー: '+Object.keys(j).join(', '));
+  rec.fallback=(j.fallbackInfo!==undefined&&j.fallbackInfo!==null);
+  if(rec.fallback)rec.notes.push('fallbackInfo='+pfJson(j.fallbackInfo));
+  const route=(j.routes&&j.routes[0])||null;
+  if(!route)return pfFail(rec,'HTTP 200 だが routes が空（応答不備）: '+pfJson(j).slice(0,300));
+  rec.notes.push('routes[0]キー: '+Object.keys(route).join(', '));
+  if(route.duration===undefined&&route.distanceMeters===undefined&&!route.legs)return pfFail(rec,'routes[0] に duration/distanceMeters/legs が無い（応答不備）');
+  rec.min=(route.duration!=null)?Math.round(durSec(route.duration)/60):null;
+  rec.staticMin=(route.staticDuration!=null)?Math.round(durSec(route.staticDuration)/60):null;
+  rec.km=(route.distanceMeters!=null)?(route.distanceMeters/1000):null;
+  const jd=pfJudge(route);
+  rec.status=jd.status;rec.head=jd.head;rec.lines=jd.lines;
+  const steps=[];
+  (route.legs||[]).forEach((lg,li)=>{
+    (lg.steps||[]).forEach(st=>{
+      steps.push({leg:li+1,dist:st.distanceMeters,text:(st.navigationInstruction&&st.navigationInstruction.instructions)||''});
+    });
+  });
+  rec.steps=steps;
+  rec.notes.push('legs数: '+((route.legs||[]).length)+' / steps数: '+steps.length);
+  return rec;
+}
+
+// ── JSライブラリ呼出し ──
+async function pfRunJs(id,title,o,d){
+  const rec=pfNewRec(id,'JS',title);
+  try{
+    if(!(typeof google!=='undefined'&&google.maps&&typeof google.maps.importLibrary==='function'))
+      return pfFail(rec,'Maps JS（importLibrary）が未読込です。先にAPIキーで接続してください。');
+    const lib=await google.maps.importLibrary('routes');
+    const Route=lib&&lib.Route;
+    if(!Route||typeof Route.computeRoutes!=='function')
+      return pfFail(rec,'Route.computeRoutes が存在しません。routesライブラリのキー: '+Object.keys(lib||{}).join(', '));
+    const res=await Promise.race([
+      Route.computeRoutes({
+        origin:{lat:o.lat,lng:o.lng},destination:{lat:d.lat,lng:d.lng},
+        travelMode:'DRIVING',
+        routingPreference:'TRAFFIC_AWARE_OPTIMAL',
+        extraComputations:['TOLLS'],
+        routeModifiers:{vehicleInfo:{emissionType:'GASOLINE'},tollPasses:['JP_ETC']},
+        fields:['durationMillis','staticDurationMillis','distanceMeters','travelAdvisory','legs']
+      }),
+      pfTimeout(20000)
+    ]);
+    rec.notes.push('返り値トップキー: '+pfKeys(res).join(', ')+(Array.isArray(res)?'（配列）':''));
+    const routes=Array.isArray(res)?res:(res&&res.routes);
+    if(res&&!Array.isArray(res)){
+      rec.fallback=(res.fallbackInfo!==undefined&&res.fallbackInfo!==null);
+      if(rec.fallback)rec.notes.push('fallbackInfo='+pfJson(res.fallbackInfo));
+    }
+    if(!routes||!routes.length)return pfFail(rec,'routes が空/存在しない（応答不備）: '+pfJson(res).slice(0,300));
+    const route=routes[0];
+    rec.notes.push('routes[0]キー: '+pfKeys(route).join(', '));
+    rec.min=(route.durationMillis!=null)?Math.round(route.durationMillis/60000):null;
+    rec.staticMin=(route.staticDurationMillis!=null)?Math.round(route.staticDurationMillis/60000):null;
+    rec.km=(route.distanceMeters!=null)?(route.distanceMeters/1000):null;
+    if(rec.min==null&&rec.km==null&&!route.legs)return pfFail(rec,'routes[0] から durationMillis/distanceMeters/legs を読めない（応答不備）');
+    const jd=pfJudge(route);
+    rec.status=jd.status;rec.head=jd.head;rec.lines=jd.lines;
+    const lg0=(route.legs||[])[0];
+    if(lg0)rec.notes.push('legs数: '+route.legs.length+' / legs[0]キー: '+pfKeys(lg0).join(', '));
+    if(route.travelAdvisory)rec.notes.push('travelAdvisoryキー: '+pfKeys(route.travelAdvisory).join(', '));
+  }catch(e){
+    return pfFail(rec,(e&&e.message)||String(e));
+  }
+  return rec;
+}
+
+// ── 表示 ──
+function pfSegTitle(a,b){return PF_PTS[a].n+'('+a+') → '+PF_PTS[b].n+'('+b+')';}
+function pfFmtMeta(r){
+  const p=[];
+  if(r.http!=null)p.push('HTTP '+r.http);
+  if(r.min!=null)p.push('所要 '+r.min+'分'+(r.staticMin!=null?'（渋滞なし '+r.staticMin+'分）':''));
+  if(r.km!=null)p.push('距離 '+r.km.toFixed(1)+'km');
+  if(r.fallback!=null)p.push('fallbackInfo: '+(r.fallback?'あり':'なし'));
+  return p.join(' ／ ');
+}
+const PF_IC_RE=/入口|出口|インター|IC|ＩＣ|JCT|ジャンクション/;
+function pfRecHtml(r){
+  const st=PF_STATUS[r.status];
+  let h='<div class="pf-card"><div class="pf-ch"><span class="pf-id">'+escHTML(r.id)+'</span><span class="pf-ct">'+escHTML(r.kind+' '+r.title)+'</span><span class="pf-badge '+st.c+'">'+st.t+(r.head?' '+escHTML(r.head.replace(/（.*$/,'')):'')+'</span></div>';
+  const meta=pfFmtMeta(r);
+  if(meta)h+='<div class="pf-meta">'+escHTML(meta)+'</div>';
+  if(r.head)h+='<div class="pf-head">料金: '+escHTML(r.head)+'</div>';
+  if(r.error)h+='<div class="pf-err">'+escHTML(r.error)+'</div>';
+  if(r.lines.length)h+='<div class="pf-lines">'+r.lines.map(l=>'<div>'+escHTML(l)+'</div>').join('')+'</div>';
+  if(r.notes.length)h+='<div class="pf-notes">'+r.notes.map(l=>'<div>'+escHTML(l)+'</div>').join('')+'</div>';
+  if(r.id==='C'&&r.steps){
+    const n=r.steps.filter(s=>PF_IC_RE.test(s.text)).length;
+    h+='<div class="pf-meta">入口/出口/IC/JCTらしき語を含むステップ: '+n+' / '+r.steps.length+' 件（下の一覧で文言にIC名が入っているか目視確認）</div>';
+    h+='<details class="pf-steps" open><summary>全ステップ一覧（'+r.steps.length+'件）</summary><ol>'+
+      r.steps.map(s=>'<li'+(PF_IC_RE.test(s.text)?' class="pf-hit"':'')+'>'+escHTML(s.text||'(文言なし)')+(s.dist!=null?' <span class="pf-d">'+s.dist+'m</span>':'')+'</li>').join('')+'</ol></details>';
+  }
+  return h+'</div>';
+}
+function pfRender(){
+  const el=document.getElementById('pfResults');if(!el)return;
+  el.innerHTML=PF.results.map(pfRecHtml).join('');
+}
+function pfProgress(msg){const el=document.getElementById('pfProg');if(el)el.textContent=msg;}
+function pfReportText(){
+  const L=[];
+  L.push('ルートファインダー v6.2 料金・経路 実証テスト結果');
+  L.push('実行日時: '+(PF.startedAt?PF.startedAt.toLocaleString('ja-JP'):'-'));
+  L.push('オリジン: '+location.origin);
+  L.push('UA: '+navigator.userAgent);
+  L.push('条件: DRIVE / TRAFFIC_AWARE_OPTIMAL / TOLLS / GASOLINE / JP_ETC / ja / JP');
+  L.push('');
+  L.push('■サマリ');
+  PF.results.forEach(r=>{
+    L.push(r.id+' ['+r.kind+'] '+PF_STATUS[r.status].t+(r.head?' '+r.head:'')+' | '+r.title+' | '+(pfFmtMeta(r)||'-'));
+  });
+  L.push('');
+  L.push('■詳細');
+  PF.results.forEach(r=>{
+    L.push('--- '+r.id+' ['+r.kind+'] '+r.title);
+    L.push('判定: '+PF_STATUS[r.status].t+(r.head?'  料金: '+r.head:''));
+    const m=pfFmtMeta(r);if(m)L.push(m);
+    if(r.error)L.push('エラー: '+r.error);
+    r.lines.forEach(l=>L.push('  '+l));
+    r.notes.forEach(l=>L.push('  * '+l));
+    if(r.steps&&r.id==='C'){
+      L.push('  全ステップ('+r.steps.length+'件):');
+      r.steps.forEach((s,i)=>L.push('   '+(i+1)+'. '+(s.text||'(文言なし)')+(s.dist!=null?' ['+s.dist+'m]':'')));
+    }
+  });
+  if(!PF.finished)L.push('\n※実行途中または中断の結果です。');
+  return pfScrub(L.join('\n'));
+}
+async function pfCopy(){
+  const txt=pfReportText();
+  const btn=document.getElementById('pfCopyBtn');
+  const done=ok=>{if(btn){btn.textContent=ok?'✅ コピーしました':'⚠ コピー失敗（下の枠から手動コピー）';setTimeout(()=>{btn.textContent='📋 結果をコピー';},2500);}};
+  try{
+    await navigator.clipboard.writeText(txt);done(true);
+  }catch(e){
+    try{
+      const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;left:0;top:0;opacity:0';
+      document.body.appendChild(ta);ta.select();
+      const ok=document.execCommand('copy');
+      document.body.removeChild(ta);
+      done(ok);
+      if(!ok)pfShowManual(txt);
+    }catch(e2){done(false);pfShowManual(txt);}
+  }
+}
+function pfShowManual(txt){
+  const m=document.getElementById('pfManual');
+  if(m){m.style.display='block';m.value=txt;m.focus();m.select();}
+}
+function pfClose(){const ov=document.getElementById('pfOv');if(ov)ov.style.display='none';}
+function pfOpen(){
+  let ov=document.getElementById('pfOv');
+  if(!ov){
+    ov=document.createElement('div');ov.id='pfOv';ov.className='pf-ov';
+    ov.innerHTML=
+      '<div class="pf-box">'+
+      '<div class="pf-top"><b>🧪 料金・経路 実証テスト（v6.2）</b><button class="pf-x" id="pfX">✕</button></div>'+
+      '<div class="pf-body">'+
+      '<div class="pf-warn"><div>このページのオリジン: <b id="pfOrigin"></b></div>'+
+      '<div>※この検証は料金計算付きリクエスト（高単価）を最大7回送ります</div></div>'+
+      '<div class="pf-prog" id="pfProg"></div>'+
+      '<div class="pf-btns"><button class="pf-btn" id="pfCopyBtn">📋 結果をコピー</button><button class="pf-btn" id="pfRerun">🔁 再実行</button></div>'+
+      '<textarea id="pfManual" class="pf-manual" readonly style="display:none"></textarea>'+
+      '<div id="pfResults"></div>'+
+      '<div class="pf-ref"><b>APIキーのリファラー制限テスト手順</b><ol>'+
+      '<li>Google Cloud Console の「APIとサービス → 認証情報」で対象のAPIキーを開き、「アプリケーションの制限」を「ウェブサイト（HTTPリファラー）」にして <code>https://d5nh4p4kry-cloud.github.io/*</code> を設定して保存する（反映に数分かかる場合あり）。</li>'+
+      '<li>このページ（上記オリジン）で本テストを実行し、正常に結果が返ることを確認する。</li>'+
+      '<li>このページとは別のオリジン（例：このHTMLをローカルに保存して file:// で開く、または別ドメインに置く）から、同じAPIキーで本テストを実行する。</li>'+
+      '<li>別オリジン側でリクエストが拒否される（RESTがHTTP 403 など、JS版もエラー）ことを確認する。拒否されなければ制限が効いていない。</li>'+
+      '</ol><div class="pf-dim">※この手順は手動で行います（コードによる自動化はしていません）。</div></div>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('pfX').addEventListener('click',pfClose);
+    document.getElementById('pfCopyBtn').addEventListener('click',pfCopy);
+    document.getElementById('pfRerun').addEventListener('click',()=>{apiProofTest();});
+  }
+  document.getElementById('pfOrigin').textContent=location.origin;
+  ov.style.display='flex';
+}
+
+// ── 本体 ──
+async function apiProofTest(){
+  if(PF.running){return;}
+  pfOpen();
+  const rb=document.getElementById('pfRerun');
+  if(!getKey()){
+    PF.results=[];pfRender();
+    pfProgress('⚠ APIキーが未入力です。キー入力後にもう一度実行してください。');
+    return;
+  }
+  if(!confirm('料金計算付きリクエスト（高単価）を最大7回送信します。実行しますか？')){
+    pfProgress('キャンセルしました。');return;
+  }
+  PF.running=true;PF.finished=false;PF.results=[];PF.startedAt=new Date();
+  if(rb)rb.disabled=true;
+  document.getElementById('pfManual').style.display='none';
+  pfRender();
+  const tasks=[];
+  PF_SEGS.forEach(s=>tasks.push({id:'A'+s[0],label:'REST '+pfSegTitle(s[1],s[2]),run:()=>pfRunRest('A'+s[0],pfSegTitle(s[1],s[2]),PF_PTS[s[1]],PF_PTS[s[2]],null)}));
+  PF_SEGS.forEach(s=>tasks.push({id:'B'+s[0],label:'JS '+pfSegTitle(s[1],s[2]),run:()=>pfRunJs('B'+s[0],pfSegTitle(s[1],s[2]),PF_PTS[s[1]],PF_PTS[s[2]])}));
+  tasks.push({id:'C',label:'REST+経由点 '+pfSegTitle('P1','P5'),run:()=>pfRunRest('C',pfSegTitle('P1','P5')+' 経由: '+PF_VIA.map(v=>v.n).join('→'),PF_PTS.P1,PF_PTS.P5,PF_VIA)});
+  try{
+    for(let i=0;i<tasks.length;i++){
+      const t=tasks[i];
+      pfProgress('実行中 '+(i+1)+'/'+tasks.length+' : '+t.id+' '+t.label+' ...');
+      let rec;
+      try{rec=await t.run();}
+      catch(e){rec=pfFail(pfNewRec(t.id,'?',t.label),(e&&e.message)||String(e));}
+      PF.results.push(rec);
+      pfRender();
+    }
+    PF.finished=true;
+    const cnt={free:0,paid:0,unknown:0,unverified:0};
+    PF.results.forEach(r=>cnt[r.status]++);
+    pfProgress('完了: 無料 '+cnt.free+' / 料金あり '+cnt.paid+' / 有料・金額不明 '+cnt.unknown+' / 未検証 '+cnt.unverified+'（「結果をコピー」で全文を取得できます）');
+  }finally{
+    PF.running=false;
+    if(rb)rb.disabled=false;
+  }
 }
 
 // v5.9: Google Maps API認証エラーの正確な原因を画面表示
