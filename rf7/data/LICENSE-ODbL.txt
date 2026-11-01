@@ -1,0 +1,36 @@
+Open Database License (ODbL) 1.0  --  ライセンス表示（本文ではありません）
+=====================================================================
+
+このファイルは ODbL 1.0 の約款本文ではありません。本文の手元の写しがないため、本文の所在（URI）を示します。
+This file is NOT the text of the licence. It gives the location (URI) of the full text.
+
+  Open Database License (ODbL) v1.0
+  https://opendatacommons.org/licenses/odbl/1-0/
+
+適用範囲 / Scope
+----------------
+次のファイルは、OpenStreetMap のデータから作成した派生データベース (Derivative Database) であり、
+ODbL 1.0 のもとで提供します。
+The following files are Derivative Databases made from OpenStreetMap data and are made available under ODbL 1.0.
+
+  - graph-small.app.json        (アプリ用の軽量版 / lightweight version for the app)
+  - graph_small.json            (完全版 / full version)
+  - graph_small.osm-only.json   (OSM のみ / OSM only)
+
+graph-small.app.json と graph_small.json には、国土数値情報（高速道路時系列データ）由来の名称・種別・
+接合部ID（CC BY 4.0）も含まれます。結合後のデータベースは ODbL として扱い、国土数値情報の出典表示を併記します。
+n06_small.json は国土数値情報のみの抽出であり、ODbL ではなく CC BY 4.0 です（別ファイル）。
+graph-small.app.json and graph_small.json also contain names, types and joint IDs derived from the
+Japanese National Land Numerical Information (N06, CC BY 4.0). The combined database is treated as ODbL and
+carries the N06 attribution as well. n06_small.json contains only the N06 extract and is CC BY 4.0, not ODbL.
+
+帰属表示 / Attribution
+----------------------
+  © OpenStreetMap contributors
+  https://www.openstreetmap.org/copyright
+  Contains information from OpenStreetMap, which is made available here under the Open Database License (ODbL).
+
+作成手順 / How these files were made
+-----------------------------------
+作成手順（build_graph.js・verify_graph.js・問い合わせ文・入力の取得方法）は ../build/ にあります。
+The build procedure (build_graph.js, verify_graph.js, the query, how the inputs were obtained) is in ../build/.
