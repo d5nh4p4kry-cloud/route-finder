@@ -13,12 +13,22 @@
  *        SURF_TOLL の内訳（leg の tollInfo／「有料区間」を含む step 添字）、非一致 leg の失敗検査コード、検証専用呼出の変種 V-t（avoidTolls）。
  *        診断に案内文の文字列・座標・距離・秒・円は出さない（v2.3 §3）。コード表は README-adapter.md「1.1.1 診断コード表」
  *
- * 変異試験（test/mutate_adapter.js）用の目印コメント @M1〜@M9 を付けた行がある。削除・移動しないこと。
+ * 1.2.0：出口 E-name の改訂（v2.4 §1）。実機（DG、2026-11-01 20:24）の step 構造に合わせる。判定規則のうち E-name 以外（形状照合・E-geo・料金・要求生成）は 1.1.1 と同一。
+ *        出口：(a) 高速 leg の step 列を末尾から遡り、到着 step（最後の 1 つ）を除いた最後の RAMP_*／FORK_* を出口操作 step とする
+ *              (b) その maneuver が RAMP_*／FORK_*、かつその step より後（到着 step を除く）に「有料区間」注記の step がない
+ *              (c) その step の始点（操作地点）が予定ランプの分流点（本線側端点）から 25 m 以内、かつ同方向の他 IC・他群の出口ランプと JCT 連絡路の分流点から 25 m 超
+ *                  （または予定の分流点の方が 25 m 以上近い）。さらに step の最初の 50 m の進行方位が予定ランプの via_heading と 45° 以内
+ *              (d) その step の案内文に、予定 IC 名＋任意の空白＋「出口」が操作対象として現れる（文型 OUT-3。「方面」直結は不可。OUT-1/OUT-2 は存続）
+ *              (e) 直後の一般道 leg に tollInfo／「有料区間」の step がない（不変）
+ *        入口：実機の入口 step には IC 名が出ないため、入口のリスク境界は E-name を評価しない（E-geo のみ。なければ unresolved）。DEPART step の IC 名は根拠にしない
+ *        診断（1.1.1）は維持。ei・mv・cd・cf は新しい (a)(c) の結果を反映（コード表は README-adapter.md「7. 診断コード表」）
+ *
+ * 変異試験（test/mutate_adapter.js）用の目印コメント（行末の「// @」＋M 番号）を付けた行がある。削除・移動しないこと。
  */
 (function (root) {
   'use strict';
 
-  const VERSION = 'rf7-adapter-1.1.1';
+  const VERSION = 'rf7-adapter-1.2.0';
 
   // ================================================================ 固定設定（§5.2 V2 の閾値は実行前に固定。変更は理由付きで全件再判定）
   const CONFIG = Object.freeze({
@@ -52,8 +62,10 @@
     UNIQ_MIN_LEN_M: 60,     // 同：連続 60 m 以上
     EGEO_COVER: 0.5,        // 同：固有区間の被覆率の下限
     GROUP_GAP_M: 25,        // 群内帰属（v2.2 §5.1）：予定端点の方が 25 m 以上近ければ確定
-    NAME_NEAR_M: 300,       // E-name (a)：入口 step が境界 leg 端点から 300 m 以内に始まる
-    NAME_POS_M: 25,         // E-name (c)：step の始点／終点が予定ランプの geom から 25 m 以内、かつ対抗から 25 m 超の点を含む
+    NAME_NEAR_M: 300,       // 1.1.1 までの入口 E-name (a) の値。1.2.0 では入口の E-name を評価しないため未使用（設定の互換のため残す）
+    NAME_POS_M: 25,         // E-name (c)（1.2.0）：出口操作 step の始点が予定ランプの分流点から 25 m 以内、かつ他の出口ランプ・JCT 連絡路の分流点から 25 m 超（または予定の方が 25 m 以上近い）
+    NAME_HEAD_M: 50,        // E-name (c)（1.2.0）：出口操作 step の進行方位を求める区間の長さ（step の最初の 50 m）
+    NAME_HEAD_DEG: 45,      // E-name (c)（1.2.0）：その進行方位と予定ランプの via_heading の差の許容
     EDGE_MISS_POS: 0.5,     // 予定辺を 1 本まるごと外れた（EDGE_COVER）とき、posRate がこれ以上なら「別経路を走った」＝不一致（README の解釈）
     // --- V1/V3/V5
     MAX_POINTS: 25,         // 中間地点の上限（Routes API）
@@ -231,7 +243,7 @@
     }
     for (const l of out.values()) l.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const icName = new Map((graph.ics || []).map(i => [i.ic_id, i.name]));
-    const gi = { graph, nodes, edges, out, byIc, icName, geomCache: new Map(), altCache: new Map(), uniqCache: new Map(), compCache: new Map() };
+    const gi = { graph, nodes, edges, out, byIc, icName, geomCache: new Map(), altCache: new Map(), uniqCache: new Map(), compCache: new Map(), divCache: new Map() };
     buildRampInfo(gi);
     return gi;
   }
@@ -780,8 +792,9 @@
     return alts;
   }
 
-  // ---------------------------------------------------------------- E-name：案内文の名称（v2.3 §1.3 (d)）。文型は固定のパターン表（5a 中は変更しない。変更は理由付きで記録）
-  const NAME_PATTERN_TABLE_VERSION = 'name-patterns-1';
+  // ---------------------------------------------------------------- E-name：案内文の名称（v2.3 §1.3 (d)、v2.4 §1.1 (d)）。文型は固定のパターン表（5a 中は変更しない。変更は理由付きで記録）
+  // name-patterns-2（1.2.0）：OUT-3 を追加（理由：実機の出口 step の案内文は「<IC名> 出口を <方面> 方面に…」で、IC 名と「出口」の間に空白がある〔v2.4 §0〕。OUT-1／OUT-2 は空白を許さず不一致）。IN-1／IN-2／OUT-1／OUT-2 は不変
+  const NAME_PATTERN_TABLE_VERSION = 'name-patterns-2';
   const reEsc = x => String(x).replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
   /** IC 名の表記ゆれ：N06 名（例 綾瀬SIC・厚木PASIC）に加え、末尾 SIC を「スマートIC」「スマートインターチェンジ」にした形 */
   function icNameForms(name) {
@@ -795,6 +808,10 @@
   function inTarget(forms) { return '(?:' + forms.map(f => (IC_ENDS.test(f) ? reEsc(f) + '(?:入口)?' : reEsc(f) + '(?:入口|IC|インターチェンジ)')).join('|') + ')'; }
   /** 出口側の対象表現：「◯◯出口」「◯◯ICの出口」。「出口」表記を必須とする */
   function outTarget(forms) { return '(?:' + forms.map(f => (IC_ENDS.test(f) ? reEsc(f) + '(?:の)?出口' : reEsc(f) + '出口')).join('|') + ')'; }
+  /** OUT-3 の対象表現：「◯◯ 出口」「◯◯IC 出口」「◯◯出口」（IC 名＋任意の空白＋「出口」。空白は半角・全角・改行を何個でも） */
+  function outTarget3(forms) { return '(?:' + forms.map(f => reEsc(f) + (IC_ENDS.test(f) ? '(?:の)?' : '(?:IC|インターチェンジ)?') + '[\\s　]*出口').join('|') + ')'; }
+  const OUT3_NOT_DIRECTION = '(?![\\s　]*(?:方面|方向|行き))';       // @M12  OUT-3：「◯◯ 出口方面」「◯◯出口 方面」は標識・方面表示であって操作対象ではない（直後に「方面」が続くものを除く）
+  const OUT3_NEXT = '(?=[\\s　]?[ぁ-んァ-ヶ一-龯])';                  // OUT-3：直後に文が続くこと（「を／へ／に／から」等の助詞や動詞。文末・読点・列挙記号の直前は不可）
   const PAT_IN_VERB = '(?:に入り|に入る|に入って|へ入り|へ入る|に入ります|へ入ります|に進入|に乗り|に乗る|に合流|を利用して入)';
   const PAT_OUT_VERB = '(?:出ます|出る|出て|降ります|降りる|降りて|退出|を出)';
   /** (d) の文型表。kind: 'in'|'out'。操作対象としての出現だけを認める（「◯◯方面」「◯◯/△△」「◯◯出口方面」の列挙は不可） */
@@ -803,6 +820,7 @@
     { id: 'IN-2', side: 'in', make: f => new RegExp(NAME_LEFT + inTarget(f) + '(?:に入り|に入る|に入って|に入ります|から入り|から入る|に進入|から進入)') },   // 「綾瀬SICに入る」
     { id: 'OUT-1', side: 'out', make: f => new RegExp(NAME_LEFT + outTarget(f) + '(?:から|で|を)[^。、]*?' + PAT_OUT_VERB) },  // 「渋谷出口で降りる」「渋谷出口から出る」
     { id: 'OUT-2', side: 'out', make: f => new RegExp(NAME_LEFT + outTarget(f) + '(?:に|へ)(?:進み|進む|進みます|向かい|向かう|向かいます)') },   // 「渋谷出口に進みます」
+    { id: 'OUT-3', side: 'out', make: f => new RegExp(NAME_LEFT + outTarget3(f) + OUT3_NOT_DIRECTION + OUT3_NEXT) },   // 「渋谷 出口を 池尻 方面に進みます」「渋谷IC 出口へ」（実機型）。入口側に対応する文型はない（入口の E-name は評価しない）
   ]);
   /** 案内文 text に、側 side（'in'|'out'）・IC 名 name の操作対象としての表現があるか。戻り値：一致した文型 ID または null */
   function nameOperand(text, side, name) {
@@ -811,60 +829,97 @@
     for (const p of NAME_PATTERNS) if (p.side === side && p.make(forms).test(t)) return p.id;
     return null;
   }
-  const ENTRY_MANEUVERS = ['RAMP_LEFT', 'RAMP_RIGHT', 'MERGE'];
-  const EXIT_MANEUVERS = ['RAMP_LEFT', 'RAMP_RIGHT'];
-  const FORK_MANEUVERS = ['FORK_LEFT', 'FORK_RIGHT'];
-  const isTurnManeuver = m => /^TURN_/.test(String(m || ''));
+  /** 出口操作 step になりうる maneuver（v2.4 §1.1 (a)(b)） */
+  const EXIT_STEP_MANEUVERS = ['RAMP_LEFT', 'RAMP_RIGHT', 'FORK_LEFT', 'FORK_RIGHT'];
   const toll区間 = t => String(t || '').indexOf('有料区間') >= 0;
+  /** (a) 高速 leg の step 列を末尾から遡り、到着 step（最後の 1 つ）を除いた最後の RAMP_*／FORK_* の添字。なければ -1 */
+  function exitStepIndex(steps) {
+    for (let i = steps.length - 2; i >= 0; i--) if (EXIT_STEP_MANEUVERS.indexOf(steps[i].maneuver) >= 0) return i;
+    return -1;
+  }
+  /**
+   * 出口ランプの分流点（本線側端点）と比べる「他の分流点」：同じ方向（dir）の他 IC・他群の出口ランプの分流点、および同じ方向から出る JCT 連絡路の分流点（連絡路の dir は「出発方向→到着方向」で、前半を見る）。
+   * dir が欠けているものは同方向とみなす（保守的）。戻り値：[{lat,lng}]
+   */
+  function divergeOthers(gi, ramp) {
+    if (gi.divCache.has(ramp.id)) return gi.divCache.get(ramp.id);
+    const mine = gi.groupOf.get(ramp.id), sameDir = d => !d || !ramp.dir || d === ramp.dir;
+    const list = [];
+    for (const x of gi.graph.edges) {
+      if (x.id === ramp.id) continue;
+      let n = null;
+      if (x.kind === 'off_ramp') { if (gi.groupOf.get(x.id) !== mine && sameDir(x.dir)) n = gi.nodes.get(x.from); }
+      else if (x.kind === 'jct_link') { if (sameDir(x.dir ? String(x.dir).split('→')[0] : null)) n = gi.nodes.get(x.from); }
+      if (n) list.push({ lat: n.lat, lng: n.lng, id: x.id });
+    }
+    gi.divCache.set(ramp.id, list);
+    return list;
+  }
+  /** (c) の一部：操作地点 p0 が予定の分流点から dX。他の分流点のどれからも NAME_POS_M 超、または予定の方が NAME_POS_M 以上近い */
+  function divergeClear(gi, ramp, p0, dX, cfg) {
+    for (const o of divergeOthers(gi, ramp)) { const dY = haversineM(p0, o); if (!(dY > cfg.NAME_POS_M || dX <= dY - cfg.NAME_POS_M)) return false; }
+    return true;
+  }
+  /** polyline の最初の m [m] の進行方位（始点から m 進んだ点への方位。全長が m 未満なら終点まで）。5 m 未満しか進めない・点が 2 未満なら null */
+  function startHeading(pts, m) {
+    if (!pts || pts.length < 2) return null;
+    const proj = projector(pts[0].lat, pts[0].lng), xy = pts.map(p => proj(p.lat, p.lng));
+    let acc = 0, end = xy[xy.length - 1];
+    for (let i = 1; i < xy.length; i++) {
+      const d = Math.hypot(xy[i][0] - xy[i - 1][0], xy[i][1] - xy[i - 1][1]);
+      if (acc + d >= m) { const t = d > 0 ? (m - acc) / d : 0; end = [xy[i - 1][0] + (xy[i][0] - xy[i - 1][0]) * t, xy[i - 1][1] + (xy[i][1] - xy[i - 1][1]) * t]; break; }
+      acc += d;
+    }
+    if (Math.hypot(end[0] - xy[0][0], end[1] - xy[0][1]) < 5) return null;
+    return bearingOf(end[0] - xy[0][0], end[1] - xy[0][1]);
+  }
 
   /**
-   * 境界 1 つぶんの E-name 判定（v2.3 §1.3 (a)〜(e)、すべて満たすこと）。
-   * side: 'in'|'out'、ramp: 予定ランプ辺、h: 高速 leg の添字、legs: legsView の配列、sPt: 境界 leg 端点（S_in/S_out の座標）
-   * 戻り値 { ok, conds:{a,b,c,d,e}, pattern, why[] }。conds の各値は true/false/null（判定材料なし）
+   * 境界 1 つぶんの E-name 判定（v2.4 §1。出口のみ。すべて満たすこと）。
+   * side: 'in'|'out'、ramp: 予定ランプ辺、h: 高速 leg の添字、legs: legsView の配列、sPt: 境界 leg 端点（互換のため残す。1.2.0 では使わない）
+   * 入口（side='in'）は評価しない（v2.4 §1.2：実機の入口 step には IC 名が出ない）：常に ok:false・conds:null・why:['IN_NA']。
+   * 戻り値 { ok, conds:{a,b,c,d,e}|null, pattern, why[], idx（出口操作 step の添字。なければ null） }
    */
   function nameEvidence(gi, side, ramp, h, legs, sPt, cfg) {
     cfg = cfg || CONFIG;
+    if (side !== 'out') return { ok: false, conds: null, pattern: null, why: ['IN_NA'], idx: null };
     const conds = { a: false, b: false, c: false, d: false, e: false }, why = [];
     const hw = legs && legs[h], steps = (hw && hw.steps) || [];
-    const adj = side === 'in' ? (legs && legs[h - 1]) : (legs && legs[h + 1]);
-    let st = null, nextText = '';
-    if (steps.length) {
-      st = side === 'in' ? steps[0] : steps[steps.length - 1];          // 入口：一般道 leg の最後の step の直後（＝高速 leg の最初の step）／出口：一般道 leg の最初の step の直前（＝高速 leg の最後の step）
-      nextText = side === 'in' ? ((steps[1] && steps[1].text) || '') : ((adj && adj.steps && adj.steps[0] && adj.steps[0].text) || '');
-    }
-    if (!st) { why.push('NO_STEPS'); return { ok: false, conds, pattern: null, why }; }
+    const adj = legs && legs[h + 1];
+    // (e) 補助：直後の一般道 leg に tollInfo なし、かつ「有料区間」の step なし（不変）
+    conds.e = !!adj && !adj.tollPresent && !(adj.tollSteps > 0);
+    if (!steps.length) { why.push('NO_STEPS'); if (!conds.e) why.push('e'); return { ok: false, conds, pattern: null, why, idx: null }; }
+    // (a) 出口操作 step の特定：到着 step（最後の 1 つ）を除いた最後の RAMP_*／FORK_*
+    const xi = exitStepIndex(steps); // @M10
+    conds.a = xi >= 0;
+    if (!conds.a) { why.push('NO_EXIT_STEP', 'a', 'b', 'c', 'd'); if (!conds.e) why.push('e'); return { ok: false, conds, pattern: null, why, idx: null }; }
+    const st = steps[xi];
+    // (b) 操作：RAMP_*／FORK_*、かつその step より後（到着 step を除く）に「有料区間」注記の step がない
+    const tollAfter = steps.slice(xi + 1, steps.length - 1).some(x => toll区間(x.text));
+    conds.b = EXIT_STEP_MANEUVERS.indexOf(st.maneuver || '') >= 0 && !tollAfter;
+    if (tollAfter) why.push('TOLL_AFTER');
+    // (c) 位置：操作地点（step の始点）と予定ランプの分流点の距離・他の分流点との区別・最初の 50 m の進行方位
     const pts = [];
     if (st.polyline) { try { st.polyline.length && pts.push.apply(pts, decodePolyline(st.polyline)); } catch (e) { why.push('STEP_POLY_INVALID'); } }
-    // (a) 該当 step の特定：入口は境界 leg 端点から NAME_NEAR_M 以内に始まる step。出口は高速 leg の最後の step（順序）
-    const startPt = pts.length ? pts[0] : st.start, endPt = pts.length ? pts[pts.length - 1] : st.end;
-    if (side === 'in') conds.a = !!(startPt && sPt && haversineM(startPt, sPt) <= cfg.NAME_NEAR_M);
-    else conds.a = true;
-    // (b) 操作
-    const mv = st.maneuver || '';
-    if (side === 'in') conds.b = ENTRY_MANEUVERS.indexOf(mv) >= 0 || (isTurnManeuver(mv) && toll区間(nextText));
-    else conds.b = EXIT_MANEUVERS.indexOf(mv) >= 0 || (FORK_MANEUVERS.indexOf(mv) >= 0 && !!nextText && !toll区間(nextText));
-    // (c) 位置：step の始点／終点のどちらかが予定ランプの geom から NAME_POS_M 以内、かつ step の polyline に対抗（本線・JCT 連絡路・他群ランプ）から NAME_POS_M 超の点を 1 点以上含む
-    const rg = edgeGeom(gi, ramp);
-    if (pts.length >= 1 && rg && rg.length >= 2) {
-      const proj = projector(rg[0].lat, rg[0].lng);
-      const rxy = rg.map(p => proj(p.lat, p.lng));
-      const near = [pts[0], pts[pts.length - 1]].some(p => polyDist(proj(p.lat, p.lng), rxy) <= cfg.NAME_POS_M);
-      const comps = projectComps(competitorsOf(gi, ramp), proj);
-      const off = pts.some(p => compDist(proj(p.lat, p.lng), comps, cfg.NAME_POS_M) > cfg.NAME_POS_M);
-      conds.c = near && off;
-      if (!near) why.push('POS_NEAR'); else if (!off) why.push('POS_OFF');
-    } else why.push('NO_STEP_POLYLINE');
-    // (d) 名称（固定の文型表）
+    const p0 = pts.length ? pts[0] : st.start, dv = gi.nodes.get(mainNodeIdOf(ramp));
+    if (p0 && dv) {
+      const dX = haversineM(p0, dv);
+      const near = dX <= cfg.NAME_POS_M;
+      const clear = divergeClear(gi, ramp, p0, dX, cfg); // @M11
+      const hd = startHeading(pts, cfg.NAME_HEAD_M);
+      const headOk = hd !== null && isNum(ramp.via_heading) && angDiff(hd, ramp.via_heading) <= cfg.NAME_HEAD_DEG;
+      conds.c = near && clear && headOk;
+      if (!near) why.push('POS_NEAR');
+      if (!clear) why.push('POS_OTHER');
+      if (!headOk) why.push(pts.length < 2 && why.indexOf('STEP_POLY_INVALID') < 0 ? 'NO_STEP_POLYLINE' : 'HEAD');
+    } else why.push(p0 ? 'POS_NEAR' : 'NO_STEP_POLYLINE');
+    // (d) 名称（固定の文型表：OUT-1／OUT-2／OUT-3）
     const nm = gi.icName.get(ramp.ic_id) || '';
-    const pat = nm ? nameOperand(st.text, side, nm) : null;
+    const pat = nm ? nameOperand(st.text, 'out', nm) : null;
     conds.d = !!pat;
-    // (e) 補助：入口＝直前の一般道 leg に tollInfo なし、かつ当該 step 以降に「有料区間」注記／出口＝直後の一般道 leg に tollInfo なし
-    const adjClean = !!adj && !adj.tollPresent && !(adj.tollSteps > 0);
-    if (side === 'in') conds.e = adjClean && steps.some(x => toll区間(x.text));
-    else conds.e = adjClean;
     const ok = conds.a && conds.b && conds.c && conds.d && conds.e; // @M8
     if (!ok) Object.keys(conds).forEach(k => { if (!conds[k]) why.push(k); });
-    return { ok, conds, pattern: conds.d ? pat : null, why };
+    return { ok, conds, pattern: conds.d ? pat : null, why, idx: xi };
   }
 
   // ---------------------------------------------------------------- 1.1.1 診断（判定には一切使わない）
@@ -898,14 +953,14 @@
     }
     return s || '.';
   }
-  const DIAG_LEG_REASONS = ['NO_STEPS', 'NO_STEP_POLYLINE', 'STEP_POLY_INVALID', 'POS_NEAR', 'POS_OFF'];
+  const DIAG_LEG_REASONS = ['NO_STEPS', 'NO_EXIT_STEP', 'NO_STEP_POLYLINE', 'STEP_POLY_INVALID', 'POS_NEAR', 'POS_OTHER', 'HEAD', 'TOLL_AFTER', 'IN_NA'];
   /**
    * リスク境界 1 つぶんの診断。side: 'in'|'out'、ramp: 予定ランプ辺、h: 高速 leg の添字、legs: legsView の配列、ne: nameEvidence の結果（判定に使った値、または診断用に別に求めた同じ関数の値）。
    * 戻り値（すべて数・真偽・固定文字のみ）：
-   *  hn 高速 leg の step 数／an 隣接一般道 leg（入口＝直前、出口＝直後）の step 数（なければ null）／ei E-name が見た step の末尾からの位置（0＝高速 leg の最後の step。step がなければ null）／
+   *  hn 高速 leg の step 数／an 隣接一般道 leg（入口＝直前、出口＝直後）の step 数（なければ null）／ei E-name が見た step の末尾からの位置（0＝高速 leg の最後の step）。1.2.0：出口＝(a) の出口操作 step（到着 step の直前なら 1。見つからない・step がなければ null）、入口＝最初の step（構造の記録だけで E-name は評価しない）／
    *  mv その step の maneuver 列挙名（NONE＝なし、OTHER＝未知）／cd E-name の条件 a〜e のうち真のもの（なければ -）／
-   *  nf IC 名を含む step が最初に現れる位置 { leg, step, tail }（route の全 leg を先頭から。なければ null）／pm 文型表（IN-1〜OUT-2）に一致した step（直前・高速・直後の leg、最大 8 件）[{ leg, step, p }]／
-   *  pt E-name が見た step の文型表の結果（IN-1|IN-2|OUT-1|OUT-2|NONE）／cf (c) の失敗区分（POS_NEAR|POS_OFF|NO_STEP_POLYLINE|STEP_POLY_INVALID|NO_STEPS を + でつなぐ。失敗なしは OK）／
+   *  nf IC 名を含む step が最初に現れる位置 { leg, step, tail }（route の全 leg を先頭から。なければ null）／pm 文型表（IN-1〜OUT-3）に一致した step（直前・高速・直後の leg、最大 8 件）[{ leg, step, p }]／
+   *  pt E-name が見た step の文型表の結果（IN-1|IN-2|OUT-1|OUT-2|OUT-3|NONE）／cf 失敗区分（1.2.0：NO_STEPS|NO_EXIT_STEP〔(a)〕|TOLL_AFTER〔(b)〕|NO_STEP_POLYLINE|STEP_POLY_INVALID|POS_NEAR|POS_OTHER|HEAD〔(c)〕|IN_NA〔入口は評価しない〕 を + でつなぐ。失敗なしは OK）／
    *  hf 高速 leg の step ごとのフラグ列（カンマ区切り）／af 隣接一般道 leg の step ごとのフラグ列（なければ null）
    */
   function boundaryDiag(gi, side, ramp, h, legs, ne) {
@@ -913,7 +968,7 @@
     const forms = nm ? icNameForms(nm) : [];
     const hw = legs && legs[h], steps = (hw && hw.steps) || [];
     const adj = legs && legs[side === 'in' ? h - 1 : h + 1], adjSteps = (adj && adj.steps) || [];
-    const hn = steps.length, idx = hn ? (side === 'in' ? 0 : hn - 1) : null;
+    const hn = steps.length, idx = !hn ? null : (side === 'in' ? 0 : (ne && isNum(ne.idx) ? ne.idx : null));   // 1.2.0：出口＝E-name が見た出口操作 step（なければ null）。入口＝最初の step（構造の記録だけ。E-name は評価しない）
     let nf = null;
     if (forms.length && legs) {
       for (let li = 0; li < legs.length && !nf; li++) {
@@ -1779,7 +1834,7 @@
       mt, bd, c.condition || (c.failReason ? 'ERR:' + c.failReason : '-'), yn(c.fallback), c.timeDependency || '-', c.request ? (c.request.intermediates + (c.request.variant !== 'V-a' ? '/' + c.request.variant : '')) : '-'].join('|');
   }
   const CALL_LOG_HEADER = '呼出ログ（seq|kind|slot|候補ID|attempt|retry|HTTP|ms|期限確認|料金状態|全旅程料金(規則)|照合[理由]|境界(S_in/S_out:R=吸着リスク/N=通常:根拠{診断}と非一致legの内訳)|条件|fallback|時刻依存|点数/変種）';
-  const DIAG_LEGEND = '診断凡例(1.1.1。案内文の文字列・座標・距離は含まない): 境界{hn=高速legのstep数;an=隣接一般道legのstep数;ei=E-nameが見たstepの末尾からの位置(0=最後);mv=そのstepのmaneuver列挙名;cd=E-name条件a〜eのうち真;nf=IC名を含む最初のstep(L=leg,s=添字,t=末尾からの位置);pm=文型表に一致したstep(leg,step:文型);pt=E-nameが見たstepの文型(NONE=不一致);cf=(c)の失敗区分(OK=失敗なし);hf/af=stepごとのフラグ(N=IC名 D=出口 I=入口 R=ランプ J=JCT T=有料区間 H=方面 W=IC名+空白+出口 V=IC名+空白+入口 .=なし)} ／非一致leg L<i>{n=step数;f=失敗した検査;mv=maneuver略号(RL=RAMP_LEFT RR=RAMP_RIGHT MG=MERGE FL/FR=FORK ST=STRAIGHT TL/TR=TURN 他はREADME)} ／一般道leg L<i>{ti=legのtollInfo有;ts=有料区間を含むstep添字;n=step数}';
+  const DIAG_LEGEND = '診断凡例(1.1.1の形式。1.2.0でei・mv・cd・cfの意味を更新。案内文の文字列・座標・距離は含まない): 境界{hn=高速legのstep数;an=隣接一般道legのstep数;ei=E-nameが見たstepの末尾からの位置(0=最後,1=到着stepの直前。出口=出口操作step、入口=最初のstep);mv=そのstepのmaneuver列挙名;cd=E-name条件a〜eのうち真(入口は評価しない=-);nf=IC名を含む最初のstep(L=leg,s=添字,t=末尾からの位置);pm=文型表に一致したstep(leg,step:文型);pt=E-nameが見たstepの文型(NONE=不一致);cf=失敗区分(OK=失敗なし,NO_EXIT_STEP=出口操作stepなし,TOLL_AFTER=出口操作step以降に有料区間,POS_NEAR=分流点から遠い,POS_OTHER=他の分流点に近い,HEAD=方位不一致,IN_NA=入口は評価しない);hf/af=stepごとのフラグ(N=IC名 D=出口 I=入口 R=ランプ J=JCT T=有料区間 H=方面 W=IC名+空白+出口 V=IC名+空白+入口 .=なし)} ／非一致leg L<i>{n=step数;f=失敗した検査;mv=maneuver略号(RL=RAMP_LEFT RR=RAMP_RIGHT MG=MERGE FL/FR=FORK ST=STRAIGHT TL/TR=TURN 他はREADME)} ／一般道leg L<i>{ti=legのtollInfo有;ts=有料区間を含むstep添字;n=step数}';
   const ATTRIBUTION = '帰属: 経路・所要時間・料金は Google Maps（Routes API）による ／ Contains information from OpenStreetMap, which is made available here under the Open Database License (ODbL). © OpenStreetMap contributors ／ 『国土数値情報（高速道路時系列データ）』（国土交通省）を加工して作成 (CC BY 4.0)';
   const CARRY_NOTICE = '持ち出し範囲(v2.3 §3): この記録は検証合否・理由コード・自社生成情報・件数集計のみ。Google 由来の所要時間・料金・距離・案内文・経路形状・緯度経度（とその区分値）は含まない（画面表示はセッション中のみ）。保存の適法性を認定したものではない';
 
@@ -1875,6 +1930,8 @@
     exportSearch, carryOut, carryHeader, checkCarryClean, decorateLines, callLogLine, formatSearchText, formatReport, testCRows, reasonWithLabel, refineReasons,
     // v1.1.0 追加
     groupAttribution, uniqueSections, egeoCover, graphInfo, distToCompetitors, nameOperand, nameEvidence, NAME_PATTERNS, NAME_PATTERN_TABLE_VERSION, icNameForms,
+    // v1.2.0 追加（出口 E-name）
+    exitStepIndex, divergeOthers, divergeClear, startHeading, EXIT_STEP_MANEUVERS,
     isR1Ride, r1Rides, hasR2, partitionDegenerate, viaPointsOf, CARRY_FORBIDDEN_KEYS, REASON_LABEL, CARRY_NOTICE,
     // v1.1.1 追加（診断）
     DIAG_VERSION, DIAG_LEGEND, MANEUVER_ENUMS, MANEUVER_ABBR, maneuverCode, stepFlags, boundaryDiag, highwayLegDiag, surfaceTollDiag, diagCode, legDiagCode, diagViolations,
