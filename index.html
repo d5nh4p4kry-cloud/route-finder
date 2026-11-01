@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v6.5</title>
+<title>ルートファインダー v6.6</title>
 <!-- v6.0: iPhoneホーム画面アプリ化（共有→ホーム画面に追加 で全画面アプリとして起動） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -434,7 +434,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v6.5</h1>
+      <h1>ルートファインダー v6.6</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -2520,7 +2520,7 @@ async function apiProofTest(){
 // ══════════════════════════════════════════════════════════════
 // v6.5: 🧪 追加実証（段階2残り：境界分割D・経路指定E・キー制限G・上限拒否I）
 // 既存の pf* 検証（PF / pfOv）とは状態・パネルを分離（PF2 / pf2Ov）。検索・区間ナビには非干渉。
-// 送信回数: 料金計算付き（高単価）最大4回（D0,D1,E0,E1）＋ 通常2回（G1,G2）／ I は別ボタンで通常3回
+// 送信回数: 料金計算付き（高単価）最大4回（D0,D1,E0,E1）＋ 通常3回（G1,G2,G3）／ I は別ボタンで通常3回
 // ══════════════════════════════════════════════════════════════
 // ==== PF2-BEGIN ====
 PF_PTS.P6={n:'成田空港付近',lat:35.7730,lng:140.3870};
@@ -3049,7 +3049,7 @@ function pf2Open(){
       '<div class="pf-top"><b id="pf2Title"></b><button class="pf-x" id="pf2X">✕</button></div>'+
       '<div class="pf-body">'+
       '<div class="pf-warn"><div>このページのオリジン: <b id="pf2Origin"></b></div>'+
-      '<div>※追加実証は料金計算付き（高単価）最大4回＋通常2回、上限拒否テストは通常3回を送ります</div></div>'+
+      '<div>※追加実証は料金計算付き（高単価）最大4回＋通常3回、上限拒否テストは通常3回を送ります</div></div>'+
       '<div class="pf-prog" id="pf2Prog"></div>'+
       '<div class="pf-btns"><button class="pf-btn" id="pf2CopyBtn">📋 結果をコピー</button><button class="pf-btn" id="pf2Rerun">🔁 再実行</button></div>'+
       '<textarea id="pf2Manual" class="pf-manual" readonly style="display:none"></textarea>'+
@@ -3190,6 +3190,43 @@ async function pf2RunE(){
 
 // ---- テストG：APIキーの利用元（リファラー）制限 ----
 async function pf2GCall(noRef){return pf2Rest(pf2MinBody(),PF2_FM_MIN,{noReferrer:!!noRef});}
+// v6.6: G3 別サイト相当（サンドボックスiframe＝不透明オリジン "null"、Refererなし）からの送信
+function pf2G3Call(){
+  return new Promise(function(resolve){
+    const tag='pf2g3_'+Date.now();
+    const ifr=document.createElement('iframe');
+    ifr.setAttribute('sandbox','allow-scripts');
+    ifr.style.cssText='position:absolute;width:1px;height:1px;left:-9999px;top:-9999px;border:0';
+    let done=false;
+    const fin=function(r){if(done)return;done=true;window.removeEventListener('message',onMsg);try{ifr.remove();}catch(_){}resolve(r);};
+    const onMsg=function(ev){
+      const d=ev.data||{};
+      if(ev.source!==ifr.contentWindow||d.t!==tag)return;
+      let json=null;try{json=JSON.parse(d.text);}catch(_){}
+      fin({http:d.http,ok:d.http>=200&&d.http<300,json:json,text:d.text||'',netErr:d.netErr||null,origin:d.origin||''});
+    };
+    window.addEventListener('message',onMsg);
+    setTimeout(function(){fin({http:null,ok:false,json:null,text:'',netErr:'20秒タイムアウト',origin:''});},20000);
+    ifr.srcdoc='<!doctype html><meta charset="utf-8"><script>'+
+      'window.addEventListener("message",async function(ev){var d=ev.data||{};if(d.t!=="'+tag+'")return;'+
+      'var out={t:d.t,http:null,text:"",netErr:null,origin:String(self.origin)};'+
+      'try{var r=await fetch(d.url,{method:"POST",referrerPolicy:"no-referrer",headers:{"Content-Type":"application/json","X-Goog-Api-Key":d.key,"X-Goog-FieldMask":d.fm},body:d.body});'+
+      'out.http=r.status;out.text=await r.text();}catch(e){out.netErr="接続できません: "+((e&&e.message)||e);}'+
+      'parent.postMessage(out,"*");});<\/script>';
+    ifr.onload=function(){
+      try{ifr.contentWindow.postMessage({t:tag,url:PF2_URL,key:getKey(),fm:PF2_FM_MIN,body:JSON.stringify(pf2MinBody())},'*');}
+      catch(e){fin({http:null,ok:false,json:null,text:'',netErr:'iframeへの受け渡しに失敗: '+((e&&e.message)||e),origin:''});}
+    };
+    document.body.appendChild(ifr);
+  });
+}
+function pf2JudgeG3(g1,g3){
+  const h1=g1?g1.http:null,h3=g3?g3.http:null;
+  if(h1===403)return {tone:'ng',label:'制限の設定が誤り（このサイトが許可されていない）',row:3};
+  if(h1===200&&h3===403)return {tone:'ok',label:'制限は有効（別サイトからは拒否）',row:1};
+  if(h1===200&&h3===200)return {tone:'ng',label:'別サイトからも使える（Routes APIのRESTにはウェブサイト制限が効いていない可能性）',row:2};
+  return {tone:'hold',label:'判定不能',row:0};
+}
 function pf2GLines(r){
   if(r.ok&&r.json&&Array.isArray(r.json.routes)&&r.json.routes[0]){
     const rt=r.json.routes[0];
@@ -3199,26 +3236,31 @@ function pf2GLines(r){
   return [pf2ErrInfo(r).line];
 }
 async function pf2RunG(){
-  pf2Progress('実行中 G1（Refererあり）...');
+  pf2Progress('実行中 G1（このアプリから・通常）...');
   const g1=await pf2GCall(false);
-  pf2Add({id:'G1',title:'REST 最小リクエスト・通常のfetch（Refererあり）',tone:(g1.http===200)?'ok':'ng',label:pf2HttpMeta(g1),meta:'Referer想定: '+location.origin+'/',lines:pf2GLines(g1)});
-  pf2Progress('実行中 G2（Refererなし）...');
+  pf2Add({id:'G1',title:'REST 最小リクエスト・通常のfetch（このアプリのページから）',tone:(g1.http===200)?'ok':'ng',label:pf2HttpMeta(g1),meta:'送り元: '+location.origin,lines:pf2GLines(g1)});
+  pf2Progress('実行中 G2（Refererなし・参考）...');
   const g2=await pf2GCall(true);
-  pf2Add({id:'G2',title:'REST 同一内容・referrerPolicy:no-referrer（Refererなし）',tone:(g2.http===200)?'ok':'ng',label:pf2HttpMeta(g2),meta:'Refererヘッダなし',lines:pf2GLines(g2)});
-  const j=pf2JudgeG(g1,g2);
+  pf2Add({id:'G2',title:'REST 同一内容・referrerPolicy:no-referrer（参考：Originヘッダは送られる）',tone:'hold',label:pf2HttpMeta(g2),meta:'Refererなし／Origin: '+location.origin,lines:pf2GLines(g2)});
+  pf2Progress('実行中 G3（別サイト相当：不透明オリジン）...');
+  const g3=await pf2G3Call();
+  pf2Add({id:'G3',title:'REST 同一内容・サンドボックスiframeから送信（別サイト相当：Origin null・Refererなし）',tone:(g3.http===403)?'ok':(g3.http===200?'ng':'hold'),label:pf2HttpMeta(g3),meta:'iframeのorigin: '+(g3.origin||'-'),lines:pf2GLines(g3)});
+  const j=pf2JudgeG3(g1,g3);
   const rows=[
-    ['G1=200 かつ G2=403','制限は有効'],
-    ['G1=200 かつ G2=200','制限なし、または無効'],
+    ['G1=200 かつ G3=403','制限は有効（別サイトからは拒否）'],
+    ['G1=200 かつ G3=200','別サイトからも使える（REST APIにウェブサイト制限が効いていない可能性）'],
     ['G1=403','制限の設定が誤り（このサイトが許可されていない）']
   ];
-  const basis=['G1=' + (g1.http!=null?g1.http:g1.netErr) + ' ／ G2=' + (g2.http!=null?g2.http:g2.netErr)];
+  const f=function(r){return r.http!=null?r.http:r.netErr;};
+  const basis=['G1='+f(g1)+' ／ G2(参考)='+f(g2)+' ／ G3='+f(g3)];
   rows.forEach(function(rw,i){basis.push((j.row===i+1?'▶ ':'　 ')+rw[0]+' → '+rw[1]);});
   if(j.row===0)basis.push('▶ 上記のどれにも当てはまらない組み合わせ（判定不能）');
   const notes=PF2_G_NOTE.slice();
-  const ei=!g2.ok?pf2ErrInfo(g2):null;
+  notes.unshift('G2は参考値：ブラウザはRefererを外してもOriginヘッダ（このアプリのアドレス）を送るため、Google側がOriginで判定している場合はG2も通ります（推測）。判定はG3で行います。');
+  const ei=!g3.ok?pf2ErrInfo(g3):null;
   if(j.row===1&&ei&&ei.reasons.length&&!ei.reasons.some(function(x){return /REFERRER/i.test(x);}))
-    notes.unshift('注意: G2の403のreasonが REFERRER 系ではありません（'+ei.reasons.join(',')+'）。リファラー以外の原因の可能性があります。');
-  pf2Add({id:'G',verdict:true,title:'APIキーのリファラー制限',tone:j.tone,label:j.label,meta:'G1 vs G2',basis:basis,notes:notes});
+    notes.unshift('注意: G3の403のreasonが REFERRER 系ではありません（'+ei.reasons.join(',')+'）。リファラー以外の原因の可能性があります。');
+  pf2Add({id:'G',verdict:true,title:'APIキーのウェブサイト制限',tone:j.tone,label:j.label,meta:'G1 vs G3（G2は参考）',basis:basis,notes:notes});
 }
 
 // ---- テストI：上限拒否 ----
@@ -3253,7 +3295,7 @@ async function apiProofTest2(){
     pf2Progress('⚠ APIキーが未入力です。キー入力後にもう一度実行してください。');
     return;
   }
-  if(!confirm('追加実証（境界分割・経路指定・キー制限）を実行します。\n料金計算付き（高単価）最大4回＋通常2回のリクエストを送信します（D0・D1・E0・E1／G1・G2）。\nD1・E1は直前の結果によっては送信されません。\n実行しますか？')){
+  if(!confirm('追加実証（境界分割・経路指定・キー制限）を実行します。\n料金計算付き（高単価）最大4回＋通常3回のリクエストを送信します（D0・D1・E0・E1／G1・G2・G3）。\nD1・E1は直前の結果によっては送信されません。\n実行しますか？')){
     pf2Progress('キャンセルしました。');return;
   }
   PF2.running=true;PF2.finished=false;PF2.results=[];PF2.startedAt=new Date();
