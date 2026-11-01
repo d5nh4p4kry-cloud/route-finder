@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ルートファインダー v6.4</title>
+<title>ルートファインダー v6.5</title>
 <!-- v6.0: iPhoneホーム画面アプリ化（共有→ホーム画面に追加 で全画面アプリとして起動） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -434,7 +434,7 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
   <div class="header-left">
     <div class="logo">R</div>
     <div>
-      <h1>ルートファインダー v6.4</h1>
+      <h1>ルートファインダー v6.5</h1>
       <div class="header-sub">有料道路コスト最適化</div>
     </div>
   </div>
@@ -556,6 +556,8 @@ body { font-family:'Noto Sans JP',sans-serif; color:var(--text); }
       <button class="btn btn-p" id="searchBtn" disabled onclick="startSearch()" style="margin-top:6px">ルート検索開始</button>
       <button class="btn" onclick="apiSelfTest()" style="margin-top:8px;width:100%;font-size:11px;padding:8px;background:rgba(171,71,188,.12);border:1px solid rgba(171,71,188,.4);color:#ce93d8">🔬 API自己診断（不具合時にお使いください）</button>
       <button class="btn" onclick="apiProofTest()" style="margin-top:6px;width:100%;font-size:11px;padding:8px;background:rgba(0,188,212,.10);border:1px solid rgba(0,188,212,.4);color:var(--accent)">🧪 料金・経路 実証テスト（Routes検証・高単価APIを最大7回）</button>
+      <button class="btn" onclick="apiProofTest2()" style="margin-top:6px;width:100%;font-size:11px;padding:8px;background:rgba(0,188,212,.10);border:1px solid rgba(0,188,212,.4);color:var(--accent)">🧪 追加実証（段階2残り：境界分割・経路指定・キー制限）</button>
+      <button class="btn" onclick="apiLimitTest()" style="margin-top:4px;width:100%;font-size:10px;padding:6px;background:rgba(0,188,212,.06);border:1px solid rgba(0,188,212,.3);color:var(--text-dim)">上限拒否テスト（3回連続送信）</button>
     </div>
 
     <!-- 一般道情報 -->
@@ -2395,7 +2397,7 @@ function pfRender(){
 function pfProgress(msg){const el=document.getElementById('pfProg');if(el)el.textContent=msg;}
 function pfReportText(){
   const L=[];
-  L.push('ルートファインダー v6.2 料金・経路 実証テスト結果');
+  L.push('ルートファインダー '+pfVer()+' 料金・経路 実証テスト結果');
   L.push('実行日時: '+(PF.startedAt?PF.startedAt.toLocaleString('ja-JP'):'-'));
   L.push('オリジン: '+location.origin);
   L.push('UA: '+navigator.userAgent);
@@ -2450,7 +2452,7 @@ function pfOpen(){
     ov=document.createElement('div');ov.id='pfOv';ov.className='pf-ov';
     ov.innerHTML=
       '<div class="pf-box">'+
-      '<div class="pf-top"><b>🧪 料金・経路 実証テスト（v6.2）</b><button class="pf-x" id="pfX">✕</button></div>'+
+      '<div class="pf-top"><b>🧪 料金・経路 実証テスト（'+escHTML(pfVer())+'）</b><button class="pf-x" id="pfX">✕</button></div>'+
       '<div class="pf-body">'+
       '<div class="pf-warn"><div>このページのオリジン: <b id="pfOrigin"></b></div>'+
       '<div>※この検証は料金計算付きリクエスト（高単価）を最大7回送ります</div></div>'+
@@ -2514,6 +2516,789 @@ async function apiProofTest(){
     if(rb)rb.disabled=false;
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// v6.5: 🧪 追加実証（段階2残り：境界分割D・経路指定E・キー制限G・上限拒否I）
+// 既存の pf* 検証（PF / pfOv）とは状態・パネルを分離（PF2 / pf2Ov）。検索・区間ナビには非干渉。
+// 送信回数: 料金計算付き（高単価）最大4回（D0,D1,E0,E1）＋ 通常2回（G1,G2）／ I は別ボタンで通常3回
+// ══════════════════════════════════════════════════════════════
+// ==== PF2-BEGIN ====
+PF_PTS.P6={n:'成田空港付近',lat:35.7730,lng:140.3870};
+const PF2={running:false,results:[],startedAt:null,finished:false};
+const PF2_URL='https://routes.googleapis.com/directions/v2:computeRoutes';
+const PF2_FM='routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.travelAdvisory.tollInfo,routes.legs.distanceMeters,routes.legs.duration,routes.legs.travelAdvisory.tollInfo,routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.startLocation,routes.legs.steps.endLocation,fallbackInfo';
+const PF2_FM_MIN='routes.duration,routes.distanceMeters';
+const PF2_TOLL='有料区間';
+const PF2_JCT_RE=/[^\s　、。（）()「」\/]{1,15}JCT/g;
+const PF2_G_NOTE=[
+  'Safari は他サイトへの通信でリファラーにオリジンのみ（https://d5nh4p4kry-cloud.github.io/）を送るため、キーの許可パターン https://d5nh4p4kry-cloud.github.io/* で一致する想定です。',
+  '一般的にリファラー制限は、ブラウザ経由で他のサイトからキーが悪用されるのを防ぐ仕組みです。サーバー等から Referer ヘッダを偽装して送信される場合までは防げません（キー流出対策としては限定的です）。'
+];
+const PF2_I_STEPS=[
+  '1) Google Cloud Console → APIとサービス → Routes API → 割り当て（「割り当てとシステム上限」）を開く。',
+  '2) 「1分あたりのリクエスト数」に相当する項目（Compute Routes の分あたり上限など）を、一時的に 2 に下げて保存する。',
+  '3) 反映を待ってから「上限拒否テスト（3回連続送信）」を実行する（3回目が 429 / RESOURCE_EXHAUSTED になれば成立）。',
+  '4) テスト後は必ず元の値に戻す（戻し忘れると通常の検索も止まります）。',
+  '※項目名・画面構成は推測を含みます。実際の画面の表記で確認してください。'
+];
+
+// ---- 版表記（document.title から取得。既存テストも使用）----
+function pfVer(){
+  const t=String(document.title||'');
+  const m=t.match(/v\d+(?:\.\d+)*/i);
+  return m?m[0]:(t||'(版不明)');
+}
+
+// ---- 幾何ユーティリティ（点は {lat,lng} の素のオブジェクト）----
+function pf2R5(x){return Math.round(x*1e5)/1e5;}
+function pf2P5(p){return pf2R5(p.lat).toFixed(5)+','+pf2R5(p.lng).toFixed(5);}
+function pf2LL(p){return {lat:function(){return p.lat;},lng:function(){return p.lng;}};}
+function pf2Hav(a,b){return haverD(pf2LL(a),pf2LL(b));}
+function pf2Cum(pts){
+  const c=new Array(pts.length);
+  if(!pts.length)return c;
+  c[0]=0;
+  for(let i=1;i<pts.length;i++)c[i]=c[i-1]+pf2Hav(pts[i-1],pts[i]);
+  return c;
+}
+// Google製ポリラインの復号（Maps JS 未読込でも動くようにローカル実装も用意。通常は既存 decodePolyline を使用）
+function pf2DecodeRaw(str){
+  let idx=0,lat=0,lng=0;const out=[];
+  while(idx<str.length){
+    for(let which=0;which<2;which++){
+      let shift=0,result=0,b;
+      do{b=str.charCodeAt(idx++)-63;result|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20);
+      const d=(result&1)?~(result>>1):(result>>1);
+      if(which===0)lat+=d;else lng+=d;
+    }
+    out.push({lat:lat/1e5,lng:lng/1e5});
+  }
+  return out;
+}
+function pf2Decode(str){
+  if(!str)return null;
+  try{
+    if(typeof google!=='undefined'&&google.maps&&typeof google.maps.LatLng==='function'){
+      return decodePolyline(str).map(function(p){return {lat:p.lat(),lng:p.lng()};});
+    }
+    return pf2DecodeRaw(str);
+  }catch(e){return null;}
+}
+// 点pから線分a-bへの距離(m, 局所平面近似)と線分上の位置t(0..1)
+function pf2SegProj(p,a,b){
+  const k=Math.PI/180,cl=Math.cos(p.lat*k),m=111195; // 球面(R=6371000)の1度あたりm。haverDと整合
+  const ax=(a.lng-p.lng)*cl*m,ay=(a.lat-p.lat)*m,bx=(b.lng-p.lng)*cl*m,by=(b.lat-p.lat)*m;
+  const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;
+  let t=L2>0?(-(ax*dx+ay*dy))/L2:0;
+  t=Math.max(0,Math.min(1,t));
+  const px=ax+t*dx,py=ay+t*dy;
+  return {t:t,dist:Math.sqrt(px*px+py*py)};
+}
+// 点pを polyline に投影し、累積距離d(m)・離隔off(m)を返す。fromD以降の区間のみ探索（同一経路の往復対策）
+function pf2Project(pts,cum,p,fromD){
+  fromD=fromD||0;
+  const n=pts.length;
+  let best=null;
+  for(let i=0;i<n-1;i++){
+    if(fromD>0&&cum[i+1]<fromD)continue;
+    const r=pf2SegProj(p,pts[i],pts[i+1]);
+    if(!best||r.dist<best.off)best={off:r.dist,i:i,t:r.t};
+  }
+  if(!best){
+    for(let i=0;i<n-1;i++){
+      const r=pf2SegProj(p,pts[i],pts[i+1]);
+      if(!best||r.dist<best.off)best={off:r.dist,i:i,t:r.t};
+    }
+  }
+  if(!best)return {d:0,off:Infinity};
+  let d=cum[best.i]+best.t*(cum[best.i+1]-cum[best.i]);
+  if(fromD>0&&d<fromD)d=Math.min(fromD,cum[n-1]);
+  return {d:d,off:best.off};
+}
+// 累積距離d → polyline 上の点
+function pf2PointAt(pts,cum,d){
+  const n=pts.length;
+  if(!n)return null;
+  if(n===1)return {lat:pts[0].lat,lng:pts[0].lng,i:0};
+  const tot=cum[n-1];
+  d=Math.max(0,Math.min(tot,d));
+  let lo=0,hi=n-1;
+  while(hi-lo>1){const mid=(lo+hi)>>1;if(cum[mid]<=d)lo=mid;else hi=mid;}
+  const sl=cum[lo+1]-cum[lo];
+  const t=sl>0?(d-cum[lo])/sl:0;
+  return {lat:pts[lo].lat+(pts[lo+1].lat-pts[lo].lat)*t,lng:pts[lo].lng+(pts[lo+1].lng-pts[lo].lng)*t,i:lo};
+}
+// 方位（北=0・東=90、0〜359の整数）
+function pf2Bearing(a,b){
+  const k=Math.PI/180,f1=a.lat*k,f2=b.lat*k,dl=(b.lng-a.lng)*k;
+  const y=Math.sin(dl)*Math.cos(f2);
+  const x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);
+  let th=Math.atan2(y,x)/k;
+  th=(th+360)%360;
+  let h=Math.round(th);
+  if(h>=360)h=0;
+  return h;
+}
+// 累積距離dでの polyline の方位（前後 win m の2点で算出）
+function pf2HeadingAt(pts,cum,d,win){
+  win=win||30;
+  const a=pf2PointAt(pts,cum,d-win),b=pf2PointAt(pts,cum,d+win);
+  if(!a||!b)return 0;
+  return pf2Bearing(a,b);
+}
+// 距離計算の高速版: 折れ線を平面座標(m)の型付き配列に前処理（経路は数千〜1万頂点規模のため）
+function pf2Prep(B,lat0){
+  const k=Math.PI/180,cl=Math.cos(lat0*k),m=111195,n=B.length;
+  const x=new Float64Array(n),y=new Float64Array(n);
+  for(let i=0;i<n;i++){x[i]=B[i].lng*cl*m;y[i]=B[i].lat*m;}
+  return {x:x,y:y,n:n,cl:cl,m:m,last:0};
+}
+// 前処理済み折れ線Pの線分[from,to)への最短距離(m)。cutoff指定時は cutoff 以内の線分が見つかった時点で打ち切る（P.last に線分番号）
+function pf2PrepDist(P,px,py,cutoff,from,to){
+  const x=P.x,y=P.y;
+  const c2=(cutoff!=null)?cutoff*cutoff:-1;
+  let bd2=Infinity,r=(cutoff!=null)?cutoff:Infinity;
+  for(let j=from;j<to;j++){
+    const ax=x[j],ay=y[j],bx=x[j+1],by=y[j+1];
+    if((ax<px-r&&bx<px-r)||(ax>px+r&&bx>px+r)||(ay<py-r&&by<py-r)||(ay>py+r&&by>py+r))continue;
+    const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;
+    let t=L2>0?((px-ax)*dx+(py-ay)*dy)/L2:0;
+    if(t<0)t=0;else if(t>1)t=1;
+    const qx=ax+t*dx-px,qy=ay+t*dy-py,d2=qx*qx+qy*qy;
+    if(d2<bd2){
+      bd2=d2;P.last=j;
+      if(cutoff!=null){if(d2<=c2)return Math.sqrt(d2);}
+      else r=Math.sqrt(bd2);
+    }
+  }
+  return Math.sqrt(bd2);
+}
+function pf2MeanLat(A,B){return ((A&&A.length?A[0].lat:B[0].lat)+B[B.length-1].lat)/2;}
+// 点p から折れ線Bまでの最短距離(m)
+function pf2MinDist(p,B){
+  if(!B||B.length<2)return Infinity;
+  const P=pf2Prep(B,p.lat);
+  return pf2PrepDist(P,p.lng*P.cl*P.m,p.lat*P.m,null,0,P.n-1);
+}
+// 折れ線Aの頂点のうち、折れ線Bから thr m 以内にある割合(0..1)。直前に一致した線分の近傍を先に調べて高速化（結果は全探索と同じ）
+function pf2NearFrac(A,B,thr){
+  if(!A||!B||!A.length||B.length<2)return null;
+  const P=pf2Prep(B,pf2MeanLat(A,B));
+  let hit=0,last=0;
+  for(let k=0;k<A.length;k++){
+    const px=A[k].lng*P.cl*P.m,py=A[k].lat*P.m;
+    let ok=false;
+    const lo=Math.max(0,last-25),hi=Math.min(P.n-1,last+26);
+    if(pf2PrepDist(P,px,py,thr,lo,hi)<=thr){ok=true;last=P.last;}
+    else if(pf2PrepDist(P,px,py,thr,0,P.n-1)<=thr){ok=true;last=P.last;}
+    if(ok)hit++;
+  }
+  return hit/A.length;
+}
+// 対象polyline T の ranges（累積距離の区間）内の頂点（step m間隔以上）のうち、Bから最も遠い点
+function pf2Farthest(T,cumT,ranges,B,minDist,step){
+  step=step||100;
+  let best=null;
+  if(!B||B.length<2)return {ok:false,best:null};
+  const P=pf2Prep(B,pf2MeanLat(T,B));
+  ranges.forEach(function(rg){
+    let lastD=-Infinity;
+    for(let i=0;i<T.length;i++){
+      const d=cumT[i];
+      if(d<rg.a||d>rg.b)continue;
+      if(d-lastD<step)continue;
+      lastD=d;
+      const dist=pf2PrepDist(P,T[i].lng*P.cl*P.m,T[i].lat*P.m,null,0,P.n-1);
+      if(!best||dist>best.dist)best={dist:dist,d:d,p:T[i]};
+    }
+  });
+  return {ok:!!(best&&best.dist>=minDist),best:best};
+}
+
+// ---- 料金・ステップの正規化 ----
+function pf2Yen(v){return '¥'+Number(v).toLocaleString('ja-JP');}
+function pf2Loc(x){
+  const l=x&&x.latLng;
+  if(!l||typeof l.latitude!=='number'||typeof l.longitude!=='number')return null;
+  return {lat:l.latitude,lng:l.longitude};
+}
+// travelAdvisory → {status:free|paid|unknown, val, text}（tollInfoなし＝無料）
+function pf2TollOf(adv){
+  const ti=adv?adv.tollInfo:undefined;
+  if(ti===undefined||ti===null)return {status:'free',val:0,text:'無料（tollInfoなし）'};
+  const j=pfTollAmounts(ti).find(function(a){return a.jpy;});
+  if(j)return {status:'paid',val:j.val,text:'料金あり '+pf2Yen(j.val)};
+  return {status:'unknown',val:null,text:'有料・金額不明'};
+}
+function pf2RouteToll(route){
+  const r=pf2TollOf(route.travelAdvisory);
+  if(r.status!=='free')return r;
+  const parts=(route.legs||[]).map(function(lg){return pf2TollOf(lg?lg.travelAdvisory:null);});
+  if(parts.some(function(p){return p.status==='paid';})){
+    const v=parts.reduce(function(s,p){return s+(p.status==='paid'?p.val:0);},0);
+    return {status:'paid',val:v,text:'料金あり '+pf2Yen(v)+'（leg合計）'};
+  }
+  if(parts.some(function(p){return p.status==='unknown';}))return {status:'unknown',val:null,text:'有料・金額不明（leg）'};
+  return r;
+}
+function pf2Jcts(steps){
+  const out=[];
+  steps.forEach(function(s){
+    const m=String(s.text||'').match(PF2_JCT_RE);
+    (m||[]).forEach(function(x){if(out.indexOf(x)<0)out.push(x);});
+  });
+  return out;
+}
+// REST の route → 判定用の要約
+function pf2Summ(route){
+  const steps=[];
+  const legs=(route.legs||[]).map(function(lg,li){
+    const t=pf2TollOf(lg?lg.travelAdvisory:null);
+    let n=0;
+    ((lg&&lg.steps)||[]).forEach(function(st){
+      const text=(st.navigationInstruction&&st.navigationInstruction.instructions)||'';
+      const toll=text.indexOf(PF2_TOLL)>=0;
+      if(toll)n++;
+      steps.push({leg:li+1,dist:Number(st.distanceMeters)||0,text:text,toll:toll,start:pf2Loc(st.startLocation),end:pf2Loc(st.endLocation)});
+    });
+    return {km:(Number(lg&&lg.distanceMeters)||0)/1000,sec:durSec(lg&&lg.duration),state:t.status,val:t.val,stateText:t.text,tollSteps:n};
+  });
+  const poly=(route.polyline&&route.polyline.encodedPolyline)?pf2Decode(route.polyline.encodedPolyline):null;
+  const tollSt=steps.filter(function(s){return s.toll;});
+  return {
+    km:(Number(route.distanceMeters)||0)/1000,
+    sec:durSec(route.duration),
+    toll:pf2RouteToll(route),
+    legs:legs,steps:steps,
+    tollStepN:tollSt.length,
+    tollStepM:tollSt.reduce(function(s,x){return s+x.dist;},0),
+    jcts:pf2Jcts(steps),
+    poly:poly,
+    cum:(poly&&poly.length)?pf2Cum(poly):null
+  };
+}
+// 「有料区間」ステップを route polyline 上の累積距離に投影（ステップごとの区間と、最初の開始〜最後の終了）
+function pf2TollSection(s){
+  const out={ranges:[],startD:null,endD:null,maxOff:0,n:0};
+  if(!s||!s.poly||s.poly.length<2||!s.cum)return out;
+  const ts=s.steps.filter(function(x){return x.toll&&x.start&&x.end;});
+  let from=0;
+  ts.forEach(function(x){
+    const a=pf2Project(s.poly,s.cum,x.start,from);
+    const b=pf2Project(s.poly,s.cum,x.end,a.d);
+    const rg={a:a.d,b:Math.max(a.d,b.d),offA:a.off,offB:b.off};
+    out.ranges.push(rg);
+    out.maxOff=Math.max(out.maxOff,a.off,b.off);
+    from=Math.max(0,rg.b-30);
+  });
+  out.n=ts.length;
+  if(out.ranges.length){
+    out.startD=out.ranges[0].a;
+    out.endD=out.ranges[out.ranges.length-1].b;
+  }
+  return out;
+}
+// D: 境界分割の中継点計画
+function pf2DPlan(sec,total){
+  const a=sec.startD,b=sec.endD;
+  if(a==null||b==null)return {hold:'有料区間が見つからない'};
+  if(b-a<300)return {hold:'有料区間が短すぎる（'+Math.round(b-a)+'m。注記が入口ステップのみの可能性）'};
+  if(a<450)return {hold:'有料区間の開始が経路起点に近すぎる（'+Math.round(a)+'m地点）'};
+  let w2=b+400,clamped=false;
+  if(w2>total){w2=total-100;clamped=true;}
+  if(w2<=b+50)return {hold:'有料区間の終了が経路終点に近すぎる（残り'+Math.round(total-b)+'m）'};
+  return {hold:null,w1d:a-400,md:(a+b)/2,w2d:w2,clamped:clamped};
+}
+
+// ---- 判定（純関数）----
+function pf2Sgn(n,digits,unit){
+  const v=Number(n);
+  return (v>0?'+':(v<0?'−':'±'))+Math.abs(v).toFixed(digits)+unit;
+}
+function pf2JudgeD(s0,s1,hold){
+  if(!s0)return {tone:'hold',label:'判定保留',basis:['D0が有効な応答を返さなかった']};
+  if(hold)return {tone:'hold',label:'判定保留',basis:[hold]};
+  if(!s1)return {tone:'hold',label:'判定不能（D1の応答不備）',basis:['D1が有効な応答を返さなかった']};
+  const L=s1.legs,b=[];
+  const c1=L.length===3;
+  b.push('legs数 = '+L.length+(c1?'（期待どおり3）':'（期待は3）'));
+  let ok=c1;
+  if(c1){
+    const k1=L[0].state==='free'&&L[0].tollSteps===0;
+    const k2=L[1].state==='paid';
+    const k3=L[2].state==='free'&&L[2].tollSteps===0;
+    b.push('leg1: '+L[0].stateText+' / 有料区間ステップ'+L[0].tollSteps+'件 → '+(k1?'OK（料金なし・有料区間なし）':'NG'));
+    b.push('leg2: '+L[1].stateText+' / 有料区間ステップ'+L[1].tollSteps+'件 → '+(k2?'OK（JPY料金あり）':'NG（JPY料金が付いていない）'));
+    b.push('leg3: '+L[2].stateText+' / 有料区間ステップ'+L[2].tollSteps+'件 → '+(k3?'OK（料金なし・有料区間なし）':'NG'));
+    ok=k1&&k2&&k3;
+  }
+  if(s0.toll.val!=null&&s1.toll.val!=null){
+    if(s0.toll.val===s1.toll.val)b.push('料金一致: D0 '+pf2Yen(s0.toll.val)+' ＝ D1 '+pf2Yen(s1.toll.val)+'（分割しても料金は変わらない）');
+    else b.push('料金差あり: D0 '+pf2Yen(s0.toll.val)+' → D1 '+pf2Yen(s1.toll.val)+'（差 '+pf2Sgn(s1.toll.val-s0.toll.val,0,'円')+'。分割で料金が変わる）');
+  }else b.push('route料金を比較できない（D0: '+s0.toll.text+' ／ D1: '+s1.toll.text+'）');
+  if(s0.km>0)b.push('距離差: D0 '+s0.km.toFixed(1)+'km → D1 '+s1.km.toFixed(1)+'km（'+pf2Sgn((s1.km-s0.km)/s0.km*100,2,'%')+'）');
+  b.push('時間差: D0 '+Math.round(s0.sec/60)+'分 → D1 '+Math.round(s1.sec/60)+'分（'+pf2Sgn((s1.sec-s0.sec)/60,1,'分')+'）');
+  return {tone:ok?'ok':'ng',label:ok?'境界分割：成立':'境界分割：不成立',basis:b};
+}
+function pf2SameList(a,b){
+  if(!a||!b||a.length!==b.length)return false;
+  for(let i=0;i<a.length;i++)if(a[i]!==b[i])return false;
+  return true;
+}
+// tgt: 対象の代替経路の要約 / e1: E1 の要約 / frac: E1頂点が対象polylineから300m以内にある割合 / base: routes[0] の要約（参考）
+function pf2JudgeE(tgt,e1,frac,base){
+  if(!tgt)return {tone:'hold',label:'判定保留',basis:['対象の代替経路がない']};
+  if(!e1||frac==null)return {tone:'hold',label:'判定不能（応答不備）',basis:['E1が有効な経路（polyline含む）を返さなかった']};
+  const b=[];
+  const jctEq=pf2SameList(tgt.jcts,e1.jcts);
+  b.push('JCT一覧: '+(jctEq?'一致':'不一致')+'（対象 '+(tgt.jcts.join('→')||'なし')+' ／ E1 '+(e1.jcts.join('→')||'なし')+'）');
+  const pOk=tgt.toll.val!=null&&e1.toll.val!=null&&tgt.toll.val===e1.toll.val;
+  b.push('料金: '+(pOk?'一致':'不一致または比較不能')+'（対象 '+tgt.toll.text+' ／ E1 '+e1.toll.text+'）');
+  const dp=tgt.km>0?(e1.km-tgt.km)/tgt.km*100:null;
+  const dOk=dp!=null&&Math.abs(dp)<=2;
+  b.push('距離: '+(dOk?'±2%以内':'±2%超または比較不能')+'（対象 '+tgt.km.toFixed(1)+'km ／ E1 '+e1.km.toFixed(1)+'km'+(dp!=null?'、'+pf2Sgn(dp,2,'%'):'')+'）');
+  const fOk=frac>=0.95;
+  b.push('polyline近接: '+(fOk?'一致':'不一致')+'（E1頂点の '+(frac*100).toFixed(1)+'% が対象polylineから300m以内。基準95%）');
+  if(base)b.push('参考: E1とroutes[0]のJCT一覧 '+(pf2SameList(base.jcts,e1.jcts)?'一致（via指定が効いていない可能性）':'不一致'));
+  const ok=jctEq&&pOk&&dOk&&fOk;
+  return {tone:ok?'ok':'ng',label:ok?'一致':'不一致',basis:b};
+}
+function pf2JudgeG(g1,g2){
+  const h1=g1?g1.http:null,h2=g2?g2.http:null;
+  if(h1===200&&h2===403)return {tone:'ok',label:'制限は有効',row:1};
+  if(h1===200&&h2===200)return {tone:'ng',label:'制限なし、または無効',row:2};
+  if(h1===403)return {tone:'ng',label:'制限の設定が誤り（このサイトが許可されていない）',row:3};
+  return {tone:'hold',label:'判定不能',row:0};
+}
+// calls: [{http, errStatus, netErr}]
+function pf2JudgeI(calls){
+  const pat=calls.map(function(c){return c.http!=null?String(c.http):'通信エラー';}).join(' → ');
+  const lim=calls.some(function(c){return c.http===429||c.errStatus==='RESOURCE_EXHAUSTED';});
+  if(lim)return {tone:'ok',label:'上限で停止を確認',pat:pat};
+  if(calls.length&&calls.every(function(c){return c.http===200;}))
+    return {tone:'hold',label:'上限に達せず（拒否なし）',pat:pat};
+  return {tone:'hold',label:'判定不能（429以外のエラーあり）',pat:pat};
+}
+
+// ---- 通信 ----
+function pf2Body(o,d,opt){
+  opt=opt||{};
+  const ll=function(p){return {latitude:pf2R5(p.lat),longitude:pf2R5(p.lng)};};
+  const body={
+    origin:{location:{latLng:ll(o)}},destination:{location:{latLng:ll(d)}},
+    travelMode:'DRIVE',routingPreference:'TRAFFIC_AWARE_OPTIMAL',
+    extraComputations:['TOLLS'],
+    routeModifiers:{vehicleInfo:{emissionType:'GASOLINE'},tollPasses:['JP_ETC']},
+    polylineQuality:'HIGH_QUALITY',languageCode:'ja',regionCode:'JP',units:'METRIC'
+  };
+  if(opt.alt)body.computeAlternativeRoutes=true;
+  if(opt.inter)body.intermediates=opt.inter;
+  return body;
+}
+function pf2MinBody(){
+  const ll=function(p){return {latitude:pf2R5(p.lat),longitude:pf2R5(p.lng)};};
+  return {origin:{location:{latLng:ll(PF_PTS.P1)}},destination:{location:{latLng:ll(PF_PTS.P2)}},travelMode:'DRIVE'};
+}
+function pf2Wp(p,via,heading){
+  const loc={latLng:{latitude:pf2R5(p.lat),longitude:pf2R5(p.lng)}};
+  if(heading!=null)loc.heading=heading;
+  return {via:!!via,location:loc};
+}
+// 例外を投げず {http, ok, json, text, netErr} を返す。HTTPエラーも結果として返す
+async function pf2Rest(body,fm,opt){
+  opt=opt||{};
+  const ctrl=new AbortController();
+  const t=setTimeout(function(){ctrl.abort();},20000);
+  const init={method:'POST',headers:{'Content-Type':'application/json','X-Goog-Api-Key':getKey(),'X-Goog-FieldMask':fm},body:JSON.stringify(body),signal:ctrl.signal};
+  if(opt.noReferrer)init.referrerPolicy='no-referrer';
+  let resp,text;
+  try{
+    resp=await fetch(PF2_URL,init);
+    text=await resp.text();
+  }catch(e){
+    clearTimeout(t);
+    return {http:null,ok:false,json:null,text:'',netErr:(e&&e.name==='AbortError')?'20秒タイムアウト':('接続できません: '+((e&&e.message)||e))};
+  }
+  clearTimeout(t);
+  let json=null;
+  try{json=JSON.parse(text);}catch(e){/* 非JSON */}
+  return {http:resp.status,ok:resp.ok,json:json,text:text,netErr:null};
+}
+function pf2ErrInfo(r){
+  if(r.netErr)return {status:'',message:r.netErr,reasons:[],line:'通信エラー: '+r.netErr};
+  const e=r.json&&r.json.error;
+  if(e){
+    const reasons=(Array.isArray(e.details)?e.details:[]).map(function(d){return d&&d.reason;}).filter(Boolean);
+    return {status:e.status||'',message:e.message||'',reasons:reasons,
+      line:'error.status='+(e.status||'-')+' / error.message='+(e.message||'-')+' / reason='+(reasons.join(',')||'-')};
+  }
+  const tx=String(r.text||'').slice(0,300);
+  return {status:'',message:tx,reasons:[],line:'本文: '+(tx||'(空)')};
+}
+function pf2HttpMeta(r){return r.http!=null?('HTTP '+r.http):(r.netErr||'通信エラー');}
+function pf2Routes(r){
+  if(r.netErr)return {err:r.netErr,routes:[]};
+  if(!r.ok)return {err:'HTTP '+r.http+' '+pf2ErrInfo(r).line,routes:[]};
+  const j=r.json;
+  if(!j||typeof j!=='object')return {err:'HTTP '+r.http+' だがJSONとして解釈できない: '+String(r.text).slice(0,200),routes:[]};
+  if(!Array.isArray(j.routes)||!j.routes.length)return {err:'HTTP '+r.http+' だが routes が空（応答不備）: '+pfJson(j).slice(0,200),routes:[]};
+  return {err:null,routes:j.routes,fb:(j.fallbackInfo!==undefined&&j.fallbackInfo!==null)?j.fallbackInfo:null};
+}
+
+// ---- 記録・表示 ----
+function pf2Add(rec){
+  const s=function(x){return pfScrub(x);};
+  const r={
+    id:rec.id,title:s(rec.title||''),tone:rec.tone||'info',label:s(rec.label||''),meta:s(rec.meta||''),
+    verdict:!!rec.verdict,
+    basis:(rec.basis||[]).map(s),lines:(rec.lines||[]).map(s),notes:(rec.notes||[]).map(s),
+    err:rec.err?s(rec.err):null
+  };
+  PF2.results.push(r);
+  pf2Render();
+  return r;
+}
+function pf2Min(sec){return Math.round(sec/60);}
+function pf2RouteLines(s){
+  const L=['route料金: '+s.toll.text,
+    '所要 '+pf2Min(s.sec)+'分 ／ 距離 '+s.km.toFixed(1)+'km ／ legs数 '+s.legs.length+' ／ steps数 '+s.steps.length+' ／ 有料区間ステップ '+s.tollStepN+'件（距離計 '+(s.tollStepM/1000).toFixed(1)+'km）'];
+  s.legs.forEach(function(l,i){
+    L.push('leg'+(i+1)+': 距離 '+l.km.toFixed(1)+'km ／ 時間 '+pf2Min(l.sec)+'分 ／ '+l.stateText+' ／ 有料区間ステップ '+l.tollSteps+'件');
+  });
+  return L;
+}
+function pf2StepLines(s){
+  const out=[];
+  const ts=s.steps.map(function(x,i){return {x:x,i:i};}).filter(function(o){return o.x.toll;});
+  ts.slice(0,12).forEach(function(o){
+    out.push('有料ステップ#'+(o.i+1)+'(leg'+o.x.leg+') '+Math.round(o.x.dist)+'m: '+String(o.x.text).replace(/\n/g,'⏎').slice(0,60));
+  });
+  if(ts.length>12)out.push('…他 '+(ts.length-12)+' 件');
+  if(!ts.length)out.push('「有料区間」を含むステップなし');
+  return out;
+}
+function pf2RecHtml(r){
+  const cls={ok:'pf-free',ng:'pf-ng',hold:'pf-unk',info:'pf-paid'}[r.tone]||'pf-paid';
+  let h='<div class="pf-card"'+(r.verdict?' style="border-color:var(--accent)"':'')+'><div class="pf-ch"><span class="pf-id">'+escHTML(r.id)+'</span><span class="pf-ct">'+escHTML(r.title)+'</span><span class="pf-badge '+cls+'" style="white-space:normal">'+escHTML(r.label)+'</span></div>';
+  if(r.meta)h+='<div class="pf-meta">'+escHTML(r.meta)+'</div>';
+  if(r.err)h+='<div class="pf-err">'+escHTML(r.err)+'</div>';
+  if(r.basis.length)h+='<div class="pf-head">根拠</div><div class="pf-lines">'+r.basis.map(function(l){return '<div>'+escHTML(l)+'</div>';}).join('')+'</div>';
+  if(r.lines.length)h+='<div class="pf-lines">'+r.lines.map(function(l){return '<div>'+escHTML(l)+'</div>';}).join('')+'</div>';
+  if(r.notes.length)h+='<div class="pf-notes">'+r.notes.map(function(l){return '<div>'+escHTML(l)+'</div>';}).join('')+'</div>';
+  return h+'</div>';
+}
+function pf2Render(){
+  const el=document.getElementById('pf2Results');if(!el)return;
+  el.innerHTML=PF2.results.map(pf2RecHtml).join('');
+}
+function pf2Progress(msg){const el=document.getElementById('pf2Prog');if(el)el.textContent=msg;}
+function pf2ReportText(){
+  const L=[];
+  L.push('ルートファインダー '+pfVer()+' 追加実証（段階2残り：境界分割・経路指定・キー制限・上限拒否）結果');
+  L.push('実行日時: '+(PF2.startedAt?PF2.startedAt.toLocaleString('ja-JP'):'-'));
+  L.push('オリジン: '+location.origin);
+  L.push('UA: '+navigator.userAgent);
+  L.push('条件: DRIVE / TRAFFIC_AWARE_OPTIMAL / TOLLS / GASOLINE / JP_ETC / HIGH_QUALITY / ja / JP（G・Iは最小リクエスト）。座標は小数5桁');
+  L.push('');
+  L.push('■サマリ');
+  PF2.results.forEach(function(r){
+    L.push((r.verdict?'【判定】':'')+r.id+' '+r.label+' | '+r.title+(r.meta?' | '+r.meta:''));
+    if(r.verdict)r.basis.forEach(function(b){L.push('    根拠: '+b);});
+  });
+  L.push('');
+  L.push('■詳細');
+  PF2.results.forEach(function(r){
+    L.push('--- '+r.id+' '+r.title);
+    L.push('判定: '+r.label+(r.meta?'  ('+r.meta+')':''));
+    if(r.err)L.push('エラー: '+r.err);
+    if(r.basis.length){L.push('  根拠:');r.basis.forEach(function(l){L.push('    '+l);});}
+    r.lines.forEach(function(l){L.push('  '+l);});
+    r.notes.forEach(function(l){L.push('  * '+l);});
+  });
+  if(!PF2.finished)L.push('\n※実行途中または中断の結果です。');
+  return pfScrub(L.join('\n'));
+}
+async function pf2Copy(){
+  const txt=pf2ReportText();
+  const btn=document.getElementById('pf2CopyBtn');
+  const done=function(ok){if(btn){btn.textContent=ok?'✅ コピーしました':'⚠ コピー失敗（下の枠から手動コピー）';setTimeout(function(){btn.textContent='📋 結果をコピー';},2500);}};
+  try{
+    await navigator.clipboard.writeText(txt);done(true);
+  }catch(e){
+    try{
+      const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;left:0;top:0;opacity:0';
+      document.body.appendChild(ta);ta.select();
+      const ok=document.execCommand('copy');
+      document.body.removeChild(ta);
+      done(ok);
+      if(!ok)pf2ShowManual(txt);
+    }catch(e2){done(false);pf2ShowManual(txt);}
+  }
+}
+function pf2ShowManual(txt){
+  const m=document.getElementById('pf2Manual');
+  if(m){m.style.display='block';m.value=txt;m.focus();m.select();}
+}
+function pf2Close(){const ov=document.getElementById('pf2Ov');if(ov)ov.style.display='none';}
+function pf2Open(){
+  let ov=document.getElementById('pf2Ov');
+  if(!ov){
+    ov=document.createElement('div');ov.id='pf2Ov';ov.className='pf-ov';
+    ov.innerHTML=
+      '<div class="pf-box">'+
+      '<div class="pf-top"><b id="pf2Title"></b><button class="pf-x" id="pf2X">✕</button></div>'+
+      '<div class="pf-body">'+
+      '<div class="pf-warn"><div>このページのオリジン: <b id="pf2Origin"></b></div>'+
+      '<div>※追加実証は料金計算付き（高単価）最大4回＋通常2回、上限拒否テストは通常3回を送ります</div></div>'+
+      '<div class="pf-prog" id="pf2Prog"></div>'+
+      '<div class="pf-btns"><button class="pf-btn" id="pf2CopyBtn">📋 結果をコピー</button><button class="pf-btn" id="pf2Rerun">🔁 再実行</button></div>'+
+      '<textarea id="pf2Manual" class="pf-manual" readonly style="display:none"></textarea>'+
+      '<div id="pf2Results"></div>'+
+      '<div class="pf-ref"><b>上限拒否テスト（I）の手順</b>（メイン画面の「上限拒否テスト（3回連続送信）」から実行）<ol>'+
+      PF2_I_STEPS.map(function(t){return '<li style="list-style:none;margin-left:-18px">'+escHTML(t)+'</li>';}).join('')+
+      '</ol></div>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('pf2X').addEventListener('click',pf2Close);
+    document.getElementById('pf2CopyBtn').addEventListener('click',pf2Copy);
+    document.getElementById('pf2Rerun').addEventListener('click',function(){apiProofTest2();});
+  }
+  document.getElementById('pf2Title').textContent='🧪 追加実証（段階2残り）'+pfVer();
+  document.getElementById('pf2Origin').textContent=location.origin;
+  ov.style.display='flex';
+  pf2Render();
+}
+
+// ---- テストD：境界分割 ----
+async function pf2RunD(){
+  const o=PF_PTS.P1,d=PF_PTS.P2,ttl='REST '+pfSegTitle('P1','P2');
+  pf2Progress('実行中 D0 '+ttl+' ...');
+  const r0=await pf2Rest(pf2Body(o,d),PF2_FM);
+  const p0=pf2Routes(r0);
+  if(p0.err){
+    pf2Add({id:'D0',title:ttl+'（通常ルート・基準）',tone:'ng',label:'未検証',meta:pf2HttpMeta(r0),err:p0.err});
+    pf2Add(Object.assign({id:'D',verdict:true,title:'境界分割（non-via）'},pf2JudgeD(null,null,null)));
+    return;
+  }
+  const s0=pf2Summ(p0.routes[0]);
+  const lines0=pf2RouteLines(s0).concat(pf2StepLines(s0));
+  const notes0=[];
+  if(p0.fb)notes0.push('fallbackInfo='+pfJson(p0.fb));
+  let hold=null,plan=null,sec=null;
+  if(!s0.poly||s0.poly.length<2)hold='D0に polyline が無い（応答不備）';
+  else{
+    sec=pf2TollSection(s0);
+    if(!sec.ranges.length)hold='「有料区間」を含むステップが見つからない（有料ステップ0件、または startLocation/endLocation 欠落）';
+    else{
+      lines0.push('有料区間（polyline上の累積距離）: '+Math.round(sec.startD)+'m 〜 '+Math.round(sec.endD)+'m（長さ '+Math.round(sec.endD-sec.startD)+'m / 経路全長 '+Math.round(s0.cum[s0.cum.length-1])+'m）');
+      if(sec.maxOff>100)notes0.push('注意: 有料ステップ端点とpolylineの最大離隔 '+Math.round(sec.maxOff)+'m（投影が不正確な可能性）');
+      plan=pf2DPlan(sec,s0.cum[s0.cum.length-1]);
+      hold=plan.hold;
+    }
+  }
+  let W1=null,M=null,W2=null,h=null;
+  if(!hold){
+    const q=function(dd){const p=pf2PointAt(s0.poly,s0.cum,dd);return {lat:pf2R5(p.lat),lng:pf2R5(p.lng)};};
+    W1=q(plan.w1d);M=q(plan.md);W2=q(plan.w2d);
+    h=pf2HeadingAt(s0.poly,s0.cum,plan.md);
+    lines0.push('W1（有料区間開始の400m手前）: '+pf2P5(W1)+'（'+Math.round(plan.w1d)+'m地点）');
+    lines0.push('M（有料区間の中間, via+heading）: '+pf2P5(M)+' heading='+h+'（'+Math.round(plan.md)+'m地点）');
+    lines0.push('W2（有料区間終了の'+(plan.clamped?'終点の100m手前':'400m先')+'）: '+pf2P5(W2)+'（'+Math.round(plan.w2d)+'m地点）');
+  }
+  pf2Add({id:'D0',title:ttl+'（通常ルート・基準）',tone:'info',label:'HTTP '+r0.http,meta:pf2HttpMeta(r0),lines:lines0,notes:notes0});
+  if(hold){
+    pf2Add(Object.assign({id:'D',verdict:true,title:'境界分割（non-via）'},pf2JudgeD(s0,null,hold)));
+    return;
+  }
+  pf2Progress('実行中 D1 境界分割 '+ttl+' ...');
+  const inter=[pf2Wp(W1,false),pf2Wp(M,true,h),pf2Wp(W2,false)];
+  const r1=await pf2Rest(pf2Body(o,d,{inter:inter}),PF2_FM);
+  const p1=pf2Routes(r1);
+  if(p1.err){
+    pf2Add({id:'D1',title:ttl+' ［W1(non-via)→M(via,heading)→W2(non-via)］',tone:'ng',label:'未検証',meta:pf2HttpMeta(r1),err:p1.err});
+    pf2Add(Object.assign({id:'D',verdict:true,title:'境界分割（non-via）'},pf2JudgeD(s0,null,null)));
+    return;
+  }
+  const s1=pf2Summ(p1.routes[0]);
+  const n1=[];
+  if(p1.fb)n1.push('fallbackInfo='+pfJson(p1.fb));
+  pf2Add({id:'D1',title:ttl+' ［W1(non-via)→M(via,heading)→W2(non-via)］',tone:'info',label:'legs '+s1.legs.length,meta:pf2HttpMeta(r1),lines:pf2RouteLines(s1).concat(pf2StepLines(s1)),notes:n1});
+  pf2Add(Object.assign({id:'D',verdict:true,title:'境界分割（non-via）',meta:'D0 vs D1'},pf2JudgeD(s0,s1,null)));
+}
+
+// ---- テストE：経路指定 ----
+async function pf2RunE(){
+  const o=PF_PTS.P1,d=PF_PTS.P6,ttl='REST '+pfSegTitle('P1','P6');
+  const V={id:'E',verdict:true,title:'経路指定（代替経路を via+heading で再現）'};
+  pf2Progress('実行中 E0 '+ttl+'（代替経路あり）...');
+  const r0=await pf2Rest(pf2Body(o,d,{alt:true}),PF2_FM);
+  const p0=pf2Routes(r0);
+  if(p0.err){
+    pf2Add({id:'E0',title:ttl+'（代替経路あり）',tone:'ng',label:'未検証',meta:pf2HttpMeta(r0),err:p0.err});
+    pf2Add(Object.assign({},V,{tone:'hold',label:'判定不能（応答不備）',basis:['E0が有効な応答を返さなかった']}));
+    return;
+  }
+  const sums=p0.routes.map(pf2Summ);
+  const lines0=[];
+  sums.forEach(function(s,i){
+    lines0.push('経路'+i+(i===0?'（routes[0]）':'（代替）')+': '+s.toll.text+' ／ 所要 '+pf2Min(s.sec)+'分 ／ 距離 '+s.km.toFixed(1)+'km ／ 有料区間ステップ距離合計 '+(s.tollStepM/1000).toFixed(1)+'km（'+s.tollStepN+'件） ／ JCT: '+(s.jcts.join('→')||'なし'));
+  });
+  const notes0=['routes数: '+sums.length+(p0.fb?' ／ fallbackInfo='+pfJson(p0.fb):'')];
+  // 対象＝JCT一覧が routes[0] と異なる最初の代替経路
+  let ti=-1;
+  for(let i=1;i<sums.length;i++){if(!pf2SameList(sums[i].jcts,sums[0].jcts)){ti=i;break;}}
+  let hold=null,P=null,hE=null;
+  if(ti<0)hold='代替経路なし／差がない：判定保留（routes '+sums.length+'件、JCT一覧がroutes[0]と異なる代替経路が無い）';
+  else if(!sums[0].poly||!sums[ti].poly||sums[0].poly.length<2||sums[ti].poly.length<2)hold='polylineが無い経路があり比較できない：判定保留';
+  else{
+    const tg=sums[ti];
+    const sec=pf2TollSection(tg);
+    if(!sec.ranges.length)hold='対象経路（経路'+ti+'）に「有料区間」ステップが見つからない：判定保留';
+    else{
+      if(sec.maxOff>100)notes0.push('注意: 対象経路の有料ステップ端点とpolylineの最大離隔 '+Math.round(sec.maxOff)+'m');
+      const fr=pf2Farthest(tg.poly,tg.cum,sec.ranges,sums[0].poly,1000,100);
+      if(!fr.ok)hold='対象経路（経路'+ti+'）の有料ステップ上に、routes[0]から1km以上離れた点が無い（最大離隔 '+(fr.best?Math.round(fr.best.dist)+'m':'算出不能')+'）：判定保留';
+      else{
+        hE=pf2HeadingAt(tg.poly,tg.cum,fr.best.d);
+        P={lat:pf2R5(fr.best.p.lat),lng:pf2R5(fr.best.p.lng),dist:fr.best.dist,d:fr.best.d};
+        lines0.push('対象: 経路'+ti+'（JCT一覧が routes[0] と異なる最初の代替経路）');
+        lines0.push('P_E: '+pf2P5(P)+' heading='+hE+'（対象polyline '+Math.round(P.d)+'m地点 ／ routes[0] から '+Math.round(P.dist)+'m 離隔）');
+      }
+    }
+  }
+  pf2Add({id:'E0',title:ttl+'（代替経路あり）',tone:'info',label:'経路 '+sums.length+'本',meta:pf2HttpMeta(r0),lines:lines0,notes:notes0});
+  if(hold){
+    pf2Add(Object.assign({},V,{tone:'hold',label:'判定保留',basis:[hold]}));
+    return;
+  }
+  pf2Progress('実行中 E1 '+ttl+'（via+heading）...');
+  const r1=await pf2Rest(pf2Body(o,d,{inter:[pf2Wp(P,true,hE)]}),PF2_FM);
+  const p1=pf2Routes(r1);
+  if(p1.err){
+    pf2Add({id:'E1',title:ttl+' ［P_E(via,heading)］',tone:'ng',label:'未検証',meta:pf2HttpMeta(r1),err:p1.err});
+    pf2Add(Object.assign({},V,pf2JudgeE(sums[ti],null,null,sums[0])));
+    return;
+  }
+  const e1=pf2Summ(p1.routes[0]);
+  const frac=(e1.poly&&e1.poly.length>1)?pf2NearFrac(e1.poly,sums[ti].poly,300):null;
+  const n1=[];
+  if(p1.fb)n1.push('fallbackInfo='+pfJson(p1.fb));
+  const l1=['経路: '+e1.toll.text+' ／ 所要 '+pf2Min(e1.sec)+'分 ／ 距離 '+e1.km.toFixed(1)+'km ／ legs数 '+e1.legs.length+' ／ 有料区間ステップ距離合計 '+(e1.tollStepM/1000).toFixed(1)+'km（'+e1.tollStepN+'件）','JCT: '+(e1.jcts.join('→')||'なし')];
+  pf2Add({id:'E1',title:ttl+' ［P_E(via,heading)］',tone:'info',label:'legs '+e1.legs.length,meta:pf2HttpMeta(r1),lines:l1,notes:n1});
+  pf2Add(Object.assign({},V,{meta:'E1 vs 経路'+ti},pf2JudgeE(sums[ti],e1,frac,sums[0])));
+}
+
+// ---- テストG：APIキーの利用元（リファラー）制限 ----
+async function pf2GCall(noRef){return pf2Rest(pf2MinBody(),PF2_FM_MIN,{noReferrer:!!noRef});}
+function pf2GLines(r){
+  if(r.ok&&r.json&&Array.isArray(r.json.routes)&&r.json.routes[0]){
+    const rt=r.json.routes[0];
+    return ['routes[0]: 所要 '+pf2Min(durSec(rt.duration))+'分 ／ 距離 '+((Number(rt.distanceMeters)||0)/1000).toFixed(1)+'km'];
+  }
+  if(r.ok)return ['HTTP '+r.http+' だが routes を読めない: '+String(r.text).slice(0,200)];
+  return [pf2ErrInfo(r).line];
+}
+async function pf2RunG(){
+  pf2Progress('実行中 G1（Refererあり）...');
+  const g1=await pf2GCall(false);
+  pf2Add({id:'G1',title:'REST 最小リクエスト・通常のfetch（Refererあり）',tone:(g1.http===200)?'ok':'ng',label:pf2HttpMeta(g1),meta:'Referer想定: '+location.origin+'/',lines:pf2GLines(g1)});
+  pf2Progress('実行中 G2（Refererなし）...');
+  const g2=await pf2GCall(true);
+  pf2Add({id:'G2',title:'REST 同一内容・referrerPolicy:no-referrer（Refererなし）',tone:(g2.http===200)?'ok':'ng',label:pf2HttpMeta(g2),meta:'Refererヘッダなし',lines:pf2GLines(g2)});
+  const j=pf2JudgeG(g1,g2);
+  const rows=[
+    ['G1=200 かつ G2=403','制限は有効'],
+    ['G1=200 かつ G2=200','制限なし、または無効'],
+    ['G1=403','制限の設定が誤り（このサイトが許可されていない）']
+  ];
+  const basis=['G1=' + (g1.http!=null?g1.http:g1.netErr) + ' ／ G2=' + (g2.http!=null?g2.http:g2.netErr)];
+  rows.forEach(function(rw,i){basis.push((j.row===i+1?'▶ ':'　 ')+rw[0]+' → '+rw[1]);});
+  if(j.row===0)basis.push('▶ 上記のどれにも当てはまらない組み合わせ（判定不能）');
+  const notes=PF2_G_NOTE.slice();
+  const ei=!g2.ok?pf2ErrInfo(g2):null;
+  if(j.row===1&&ei&&ei.reasons.length&&!ei.reasons.some(function(x){return /REFERRER/i.test(x);}))
+    notes.unshift('注意: G2の403のreasonが REFERRER 系ではありません（'+ei.reasons.join(',')+'）。リファラー以外の原因の可能性があります。');
+  pf2Add({id:'G',verdict:true,title:'APIキーのリファラー制限',tone:j.tone,label:j.label,meta:'G1 vs G2',basis:basis,notes:notes});
+}
+
+// ---- テストI：上限拒否 ----
+async function pf2RunI(){
+  const calls=[],lines=[];
+  for(let i=0;i<3;i++){
+    pf2Progress('実行中 I '+(i+1)+'/3（間隔なし）...');
+    const r=await pf2GCall(false);
+    const ei=r.ok?null:pf2ErrInfo(r);
+    calls.push({http:r.http,errStatus:ei?ei.status:'',netErr:r.netErr});
+    lines.push((i+1)+'回目: '+pf2HttpMeta(r)+(ei?' ／ '+ei.line:' ／ 受理'));
+  }
+  const j=pf2JudgeI(calls);
+  const basis=['HTTPの並び: '+j.pat];
+  if(j.tone==='ok')basis.push('429 / RESOURCE_EXHAUSTED が返った＝割り当て上限で拒否されることを確認');
+  else if(j.label.indexOf('拒否なし')>=0)basis.push('3回とも受理。上限を事前に下げていない、反映前、または下げた項目が実際の制限と別の可能性があります');
+  else basis.push('429 以外のエラーが混在。各回の error.status / message を確認してください');
+  pf2Add({id:'I',verdict:true,title:'上限拒否（通常リクエスト3回連続）',tone:j.tone,label:j.label,basis:basis,lines:lines,notes:PF2_I_STEPS.slice()});
+}
+
+// ---- 本体 ----
+async function pf2Guard(id,title,fn){
+  try{await fn();}
+  catch(e){pf2Add({id:id,verdict:true,title:title,tone:'hold',label:'判定不能（内部エラー）',err:(e&&e.message)||String(e)});}
+}
+async function apiProofTest2(){
+  if(PF2.running)return;
+  pf2Open();
+  const rb=document.getElementById('pf2Rerun');
+  if(!getKey()){
+    PF2.results=[];pf2Render();
+    pf2Progress('⚠ APIキーが未入力です。キー入力後にもう一度実行してください。');
+    return;
+  }
+  if(!confirm('追加実証（境界分割・経路指定・キー制限）を実行します。\n料金計算付き（高単価）最大4回＋通常2回のリクエストを送信します（D0・D1・E0・E1／G1・G2）。\nD1・E1は直前の結果によっては送信されません。\n実行しますか？')){
+    pf2Progress('キャンセルしました。');return;
+  }
+  PF2.running=true;PF2.finished=false;PF2.results=[];PF2.startedAt=new Date();
+  if(rb)rb.disabled=true;
+  const mn=document.getElementById('pf2Manual');if(mn)mn.style.display='none';
+  pf2Render();
+  try{
+    await pf2Guard('D','境界分割（non-via）',pf2RunD);
+    await pf2Guard('E','経路指定（代替経路を via+heading で再現）',pf2RunE);
+    await pf2Guard('G','APIキーのリファラー制限',pf2RunG);
+    PF2.finished=true;
+    const v=PF2.results.filter(function(r){return r.verdict;}).map(function(r){return r.id+'：'+r.label;}).join(' ／ ');
+    pf2Progress('完了: '+v+'（「結果をコピー」で全文を取得できます）');
+  }finally{
+    PF2.running=false;
+    if(rb)rb.disabled=false;
+  }
+}
+async function apiLimitTest(){
+  if(PF2.running)return;
+  pf2Open();
+  const rb=document.getElementById('pf2Rerun');
+  if(!getKey()){
+    pf2Progress('⚠ APIキーが未入力です。キー入力後にもう一度実行してください。');
+    return;
+  }
+  if(!confirm('上限拒否テスト：通常リクエスト（料金計算なし）を間隔なしで3回連続送信します。\n事前に Google Cloud Console で「1分あたりのリクエスト数」相当の上限を一時的に2へ下げていない場合は拒否されず、通常3回分の課金のみです。\n（手順は画面下部。テスト後は必ず元の値に戻してください）\n実行しますか？')){
+    pf2Progress('キャンセルしました。');return;
+  }
+  PF2.running=true;PF2.finished=false;
+  PF2.results=PF2.results.filter(function(r){return r.id!=='I';});
+  if(!PF2.startedAt)PF2.startedAt=new Date();
+  if(rb)rb.disabled=true;
+  pf2Render();
+  try{
+    await pf2Guard('I','上限拒否（通常リクエスト3回連続）',pf2RunI);
+    PF2.finished=true;
+    const rI=PF2.results.filter(function(r){return r.id==='I';})[0];
+    pf2Progress('完了: I：'+(rI?rI.label:'-')+'（「結果をコピー」で全文を取得できます）');
+  }finally{
+    PF2.running=false;
+    if(rb)rb.disabled=false;
+  }
+}
+// ==== PF2-END ====
 
 // v5.9: Google Maps API認証エラーの正確な原因を画面表示
 // Googleはエラー詳細をconsole.errorにのみ出力するため、これを捕捉して表示する
