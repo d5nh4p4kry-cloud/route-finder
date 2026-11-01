@@ -9,12 +9,16 @@
  * - Google の応答（実応答）は保存しない。polyline は照合の入力としてのみ使い、既定では記録に残さない（§5.9）
  * - 推測で埋めた点は README-adapter.md の「仮定」に列挙（閾値の許容割合など）
  *
+ * 1.1.1：診断の追加のみ（判定規則・閾値・合否は 1.1.0 と同一）。リスク境界ごとの diag（案内文・step の構造に対する検査の真偽フラグ、maneuver の列挙名、step 添字・件数）、
+ *        SURF_TOLL の内訳（leg の tollInfo／「有料区間」を含む step 添字）、非一致 leg の失敗検査コード、検証専用呼出の変種 V-t（avoidTolls）。
+ *        診断に案内文の文字列・座標・距離・秒・円は出さない（v2.3 §3）。コード表は README-adapter.md「1.1.1 診断コード表」
+ *
  * 変異試験（test/mutate_adapter.js）用の目印コメント @M1〜@M9 を付けた行がある。削除・移動しないこと。
  */
 (function (root) {
   'use strict';
 
-  const VERSION = 'rf7-adapter-1.1.0';
+  const VERSION = 'rf7-adapter-1.1.1';
 
   // ================================================================ 固定設定（§5.2 V2 の閾値は実行前に固定。変更は理由付きで全件再判定）
   const CONFIG = Object.freeze({
@@ -439,13 +443,15 @@
    * engine の要求 q（kind: base|full|split）から REST 要求を作る。
    * 戻り値 ok:true → { body, fieldMask, points[], expectedLegs, intermediates, departureTime, ... }
    * opts: { carrySec（split の到着時刻引継ぎ）, omitTollInfo（検証専用：FieldMask から tollInfo を外す）,
-   *         vehicleStopover（検証専用・v2.2 §2.5 の比較試験 V-b：kind=full の S_in・S_out に vehicleStopover:true を付ける。標準の要求には付けない）, cfg }
+   *         vehicleStopover（検証専用・v2.2 §2.5 の比較試験 V-b：kind=full の S_in・S_out に vehicleStopover:true を付ける。標準の要求には付けない）,
+   *         avoidTolls（検証専用・1.1.1 の診断 V-t：kind=full に routeModifiers.avoidTolls=true を付ける。その他は V-a と同じ。V-b とは同時に指定できない）, cfg }
    */
   function buildRequest(gi, q, opts) {
     opts = opts || {};
     const cfg = opts.cfg || CONFIG;
     const cond = q.cond;
     if (!cond || !cond.origin || !cond.destination) return fail('INVALID_ARGUMENT', '比較条件がない');
+    if (opts.vehicleStopover && opts.avoidTolls) return fail('INVALID_ARGUMENT', 'V-b（vehicleStopover）と V-t（avoidTolls）は同時に指定できない');
     const depMs0 = Date.parse(cond.departureTime);
     if (!isNum(depMs0)) return fail('INVALID_ARGUMENT', 'departureTime を解釈できない');
     const mods = {};
@@ -471,6 +477,7 @@
       if (mid.length !== expectCount) return fail('POINTS_MISMATCH', '中間地点数 ' + mid.length + ' が engine の値 ' + expectCount + ' と一致しない');
       if (mid.length > cfg.MAX_POINTS) return fail('TOO_MANY_POINTS', '中間地点 ' + mid.length + ' 点が上限 ' + cfg.MAX_POINTS + ' を超える'); // @M2
       wps = [origin].concat(mid, [dest]); intermediates = mid.length; expectedLegs = 2 * c.rides.length + 1;
+      if (opts.avoidTolls) mods.avoidTolls = true;                 // V-t（検証専用。routeModifiers.avoidTolls 以外は V-a と同じ）
     } else if (kind === 'split') {
       const c = q.candidate, i = q.section, k = 2 * (c && c.rides ? c.rides.length : 0) + 1;
       if (!c || !Number.isInteger(i) || i < 0 || i >= k) return fail('INVALID_ARGUMENT', 'split の区間番号が不正');
@@ -517,7 +524,7 @@
       ok: true, kind, body, fieldMask: opts.omitTollInfo ? FIELD_MASK_NO_TOLL : FIELD_MASK,
       points: wps, intermediates, expectedLegs, departureTime: body.departureTime, departureMs: depMs,
       tollsRequested: true, fieldMaskHasToll: !opts.omitTollInfo, modifiers: mods,
-      variant: opts.vehicleStopover && kind === 'full' ? 'V-b' : 'V-a', vehicleStopover: !!(opts.vehicleStopover && kind === 'full'),
+      variant: opts.vehicleStopover && kind === 'full' ? 'V-b' : opts.avoidTolls && kind === 'full' ? 'V-t' : 'V-a', vehicleStopover: !!(opts.vehicleStopover && kind === 'full'),
     };
   }
   function compactPoints(points) {
@@ -860,6 +867,105 @@
     return { ok, conds, pattern: conds.d ? pat : null, why };
   }
 
+  // ---------------------------------------------------------------- 1.1.1 診断（判定には一切使わない）
+  // 診断が持ち出してよいのは、案内文・step の構造に対する検査の真偽（フラグ）、Routes API の列挙型 maneuver の名前、step の添字と件数、自社生成の理由コードだけ。
+  // 案内文の文字列・座標・距離・秒・円は診断に入れない（v2.3 §3）。フラグ列は固定の文字（DIAG_FLAG_CHARS）だけで作る。
+  const DIAG_VERSION = 'diag-1';
+  const MANEUVER_ENUMS = Object.freeze(['MANEUVER_UNSPECIFIED', 'TURN_SLIGHT_LEFT', 'TURN_SHARP_LEFT', 'UTURN_LEFT', 'TURN_LEFT', 'TURN_SLIGHT_RIGHT', 'TURN_SHARP_RIGHT', 'UTURN_RIGHT', 'TURN_RIGHT',
+    'STRAIGHT', 'RAMP_LEFT', 'RAMP_RIGHT', 'MERGE', 'FORK_LEFT', 'FORK_RIGHT', 'FERRY', 'FERRY_TRAIN', 'ROUNDABOUT_LEFT', 'ROUNDABOUT_RIGHT', 'DEPART', 'NAME_CHANGE']);
+  /** 呼出ログ（テキスト）で leg ごとの maneuver 列を短く出すための略号。JSON は列挙名そのまま */
+  const MANEUVER_ABBR = Object.freeze({
+    MANEUVER_UNSPECIFIED: 'UN', TURN_SLIGHT_LEFT: 'SL', TURN_SHARP_LEFT: 'HL', UTURN_LEFT: 'UL', TURN_LEFT: 'TL', TURN_SLIGHT_RIGHT: 'SR', TURN_SHARP_RIGHT: 'HR', UTURN_RIGHT: 'UR', TURN_RIGHT: 'TR',
+    STRAIGHT: 'ST', RAMP_LEFT: 'RL', RAMP_RIGHT: 'RR', MERGE: 'MG', FORK_LEFT: 'FL', FORK_RIGHT: 'FR', FERRY: 'FE', FERRY_TRAIN: 'FT', ROUNDABOUT_LEFT: 'OL', ROUNDABOUT_RIGHT: 'OR', DEPART: 'DP', NAME_CHANGE: 'NC', NONE: '-', OTHER: '??',
+  });
+  /** maneuver の値を、既知の列挙名・NONE（なし）・OTHER（未知の値）のどれかにする。未知の文字列は出さない */
+  const maneuverCode = m => (m === null || m === undefined || m === '' ? 'NONE' : (MANEUVER_ENUMS.indexOf(m) >= 0 ? m : 'OTHER'));
+  /** step ごとのフラグ文字（この順に並べる）：N=IC 名を含む／D=「出口」／I=「入口」／R=「ランプ」／J=「JCT」／T=「有料区間」／H=「方面」／W=IC 名（＋IC）の直後に空白をはさんで「出口」／V=同じく「入口」。何もなければ「.」 */
+  const DIAG_FLAG_CHARS = 'NDIRJTHWV';
+  const DIAG_WORDS = [['D', '出口'], ['I', '入口'], ['R', 'ランプ'], ['J', 'JCT'], ['T', '有料区間'], ['H', '方面']];
+  const normText = x => String(x || '').normalize('NFKC');
+  /** 案内文 text の構造フラグ。forms は NFKC 済みの IC 名の表記ゆれ（icNameForms）。戻り値は固定の文字だけ（案内文の断片を含まない） */
+  function stepFlags(text, forms) {
+    const t = normText(text);
+    forms = forms || [];
+    let s = '';
+    if (forms.length && forms.some(f => t.indexOf(f) >= 0)) s += 'N';
+    for (const w of DIAG_WORDS) if (t.indexOf(w[1]) >= 0) s += w[0];
+    if (forms.length) {
+      const alt = '(?:' + forms.map(reEsc).join('|') + ')(?:IC|インターチェンジ)?\\s+';
+      if (new RegExp(alt + '出口').test(t)) s += 'W';
+      if (new RegExp(alt + '入口').test(t)) s += 'V';
+    }
+    return s || '.';
+  }
+  const DIAG_LEG_REASONS = ['NO_STEPS', 'NO_STEP_POLYLINE', 'STEP_POLY_INVALID', 'POS_NEAR', 'POS_OFF'];
+  /**
+   * リスク境界 1 つぶんの診断。side: 'in'|'out'、ramp: 予定ランプ辺、h: 高速 leg の添字、legs: legsView の配列、ne: nameEvidence の結果（判定に使った値、または診断用に別に求めた同じ関数の値）。
+   * 戻り値（すべて数・真偽・固定文字のみ）：
+   *  hn 高速 leg の step 数／an 隣接一般道 leg（入口＝直前、出口＝直後）の step 数（なければ null）／ei E-name が見た step の末尾からの位置（0＝高速 leg の最後の step。step がなければ null）／
+   *  mv その step の maneuver 列挙名（NONE＝なし、OTHER＝未知）／cd E-name の条件 a〜e のうち真のもの（なければ -）／
+   *  nf IC 名を含む step が最初に現れる位置 { leg, step, tail }（route の全 leg を先頭から。なければ null）／pm 文型表（IN-1〜OUT-2）に一致した step（直前・高速・直後の leg、最大 8 件）[{ leg, step, p }]／
+   *  pt E-name が見た step の文型表の結果（IN-1|IN-2|OUT-1|OUT-2|NONE）／cf (c) の失敗区分（POS_NEAR|POS_OFF|NO_STEP_POLYLINE|STEP_POLY_INVALID|NO_STEPS を + でつなぐ。失敗なしは OK）／
+   *  hf 高速 leg の step ごとのフラグ列（カンマ区切り）／af 隣接一般道 leg の step ごとのフラグ列（なければ null）
+   */
+  function boundaryDiag(gi, side, ramp, h, legs, ne) {
+    const nm = normText(gi.icName.get(ramp.ic_id) || '');
+    const forms = nm ? icNameForms(nm) : [];
+    const hw = legs && legs[h], steps = (hw && hw.steps) || [];
+    const adj = legs && legs[side === 'in' ? h - 1 : h + 1], adjSteps = (adj && adj.steps) || [];
+    const hn = steps.length, idx = hn ? (side === 'in' ? 0 : hn - 1) : null;
+    let nf = null;
+    if (forms.length && legs) {
+      for (let li = 0; li < legs.length && !nf; li++) {
+        const ss = legs[li].steps || [];
+        for (let si = 0; si < ss.length; si++) { const t = normText(ss[si].text); if (forms.some(f => t.indexOf(f) >= 0)) { nf = { leg: li, step: si, tail: ss.length - 1 - si }; break; } }
+      }
+    }
+    const pm = [];
+    if (nm && legs) {
+      for (const li of [h - 1, h, h + 1]) {
+        const ss = (legs[li] && legs[li].steps) || [];
+        for (let si = 0; si < ss.length && pm.length < 8; si++) { const p = nameOperand(ss[si].text, side, nm); if (p) pm.push({ leg: li, step: si, p }); }
+      }
+    }
+    const conds = (ne && ne.conds) || {}, why = (ne && ne.why) || [];
+    const cdv = ['a', 'b', 'c', 'd', 'e'].filter(k => conds[k]).join('');
+    const cfv = DIAG_LEG_REASONS.filter(x => why.indexOf(x) >= 0).join('+');
+    return {
+      hn, an: adj ? adjSteps.length : null, ei: idx === null ? null : hn - 1 - idx, mv: idx === null ? 'NONE' : maneuverCode(steps[idx].maneuver),
+      cd: cdv || '-', nf, pm, pt: (ne && ne.pattern) || 'NONE', cf: cfv || 'OK',
+      hf: steps.map(x => stepFlags(x.text, forms)).join(','), af: adj ? adjSteps.map(x => stepFlags(x.text, forms)).join(',') : null,
+    };
+  }
+  /** 失敗検査コード（OKRATE・LENGTH・RAMP_COVER:辺ID など自社生成の文字列）。想定外の文字が混じるものは OTHER にする */
+  const safeCode = x => (/^[A-Za-z0-9_.:@+\-]{1,80}$/.test(String(x)) ? String(x) : 'OTHER');
+  /** 高速 leg の診断（非一致のときの内訳）：step 数 n・maneuver 列 mv（列挙名のカンマ区切り）・失敗した検査 fails（コードの配列。数値は含まない） */
+  function highwayLegDiag(legs, h, iFails) {
+    const steps = (legs && legs[h] && legs[h].steps) || null;
+    return { n: steps ? steps.length : null, mv: steps ? steps.map(x => maneuverCode(x.maneuver)).join(',') : null, fails: (iFails || []).map(safeCode) };
+  }
+  /** 一般道 leg の SURF_TOLL の内訳：ti＝leg の tollInfo あり／ts＝「有料区間」を含む step の添字／n＝step 数 */
+  function surfaceTollDiag(leg) {
+    const steps = (leg && leg.steps) || [];
+    const ts = [];
+    steps.forEach((x, i) => { if (toll区間(x.text)) ts.push(i); });
+    return { ti: !!(leg && leg.tollPresent), ts, n: steps.length };
+  }
+  // ---- 持ち出し・呼出ログ用の短いコード
+  const nfCode = nf => (nf ? 'L' + nf.leg + 's' + nf.step + 't' + nf.tail : '-');
+  /** 境界の診断 → 呼出ログの短いコード（'|' '/' を含まない） */
+  function diagCode(d) {
+    if (!d) return '';
+    return '{hn=' + d.hn + ';an=' + (d.an === null ? '-' : d.an) + ';ei=' + (d.ei === null ? '-' : d.ei) + ';mv=' + d.mv + ';cd=' + d.cd + ';nf=' + nfCode(d.nf) +
+      ';pm=' + (d.pm && d.pm.length ? d.pm.map(x => 'L' + x.leg + 's' + x.step + ':' + x.p).join('+') : '-') + ';pt=' + d.pt + ';cf=' + d.cf + ';hf=' + (d.hf || '-') + ';af=' + (d.af === null ? '-' : (d.af || '-')) + '}';
+  }
+  /** leg の診断（legDiag の 1 要素 { leg, type, … }）→ 短いコード。高速 leg：L1{n=12;f=OKRATE+LENGTH;mv=RL.ST…}／一般道 leg：L0{ti=1;ts=3.7;n=12} */
+  function legDiagCode(d) {
+    if (!d) return '';
+    if (d.type === 'surface') return 'L' + d.leg + '{ti=' + (d.ti ? 1 : 0) + ';ts=' + ((d.ts && d.ts.length) ? d.ts.join('.') : '-') + ';n=' + (d.n === null || d.n === undefined ? '-' : d.n) + '}';
+    return 'L' + d.leg + '{n=' + (d.n === null || d.n === undefined ? '-' : d.n) + ';f=' + ((d.fails && d.fails.length) ? d.fails.join('+') : '-') + ';mv=' + (d.mv ? d.mv.split(',').map(x => MANEUVER_ABBR[x] || '??').join('.') : '-') + '}';
+  }
+
   /** 乗車の要求のうち via 点（V_on・V_fare…・V_off）の一覧 */
   function viaPointsOf(gi, ride) {
     const rp = ridePoints(gi, ride);
@@ -868,7 +974,7 @@
 
   /**
    * 乗車1回（高速 leg）の照合（v2.1 §5.4 の遵守検査 (i)〜(vii)＋対抗経路＋v2.3 の境界ごとの識別根拠）。legPts は leg ポリラインの [{lat,lng}]。
-   * ctx（任意）：{ legs, h }＝legsView の配列と高速 leg の添字（E-name の判定材料。なければ E-name は成立しない）
+   * ctx（任意）：{ legs, h, diagAll }＝legsView の配列と高速 leg の添字（E-name の判定材料。なければ E-name は成立しない）。diagAll＝通常境界にも診断 diag を付ける（1.1.1、既定は付けない）
    */
   function matchRide(gi, ride, legPts, cfg, ctx) {
     cfg = cfg || CONFIG;
@@ -967,7 +1073,8 @@
     const cmpAlts = altRes.filter(a => !a.equiv), equivAlts = altRes.filter(a => a.equiv);
     const altStat = { worse: cmpAlts.filter(a => a.rel === 'worse').length, close: cmpAlts.filter(a => a.rel === 'close').length, better: cmpAlts.filter(a => a.rel === 'better').length, total: cmpAlts.length, equiv: equivAlts.length };
     const closest = cmpAlts.filter(a => a.rel !== 'worse').slice(0, 4).map(a => ({ type: a.type, rel: a.rel, covGap: a.covGap, bearGap: a.bearGap, passes: a.passes }));
-    const out = (verdict, reason, bds) => Object.assign(res(verdict, reason), { score: Object.assign(summary(), { alts: altStat, closest, boundaries: bds || [] }) });
+    const hwDiag = highwayLegDiag(ctx && ctx.legs, ctx && ctx.h, iFails);            // 1.1.1 診断（判定には使わない）
+    const out = (verdict, reason, bds) => Object.assign(res(verdict, reason), { score: Object.assign(summary(), { alts: altStat, closest, boundaries: bds || [] }), diag: hwDiag });
 
     // 予定の形状が基準を満たさなくても、同値経路（SA/PA を通らない走り方など）が満たし、残りの失敗が経路の差で説明できるもの（被覆・順序・適合率）だけなら同じ候補として受理する
     let equivUsed = null;
@@ -1009,14 +1116,17 @@
    * 戻り値：[{id:'S_in@辺ID'|'S_out@辺ID', side, ride辺, risk, status:'normal'|'geo'|'name'|'unresolved', via:'E-geo'|'E-name'|null, pattern, geo:{available,cover,uniqueM}, name:{conds,why}}]
    */
   function boundaryEvidence(gi, ride, edges, nIn, nOut, cred, ctx, cfg) {
+    const hasLegs = !!(ctx && ctx.legs);
     const mk = (side, ramp, sPt, creditedT) => {
-      const b = { id: (side === 'in' ? 'S_in@' : 'S_out@') + ramp.id, side, edge: ramp.id, risk: gi.risk.has(ramp.id), status: 'normal', via: null, pattern: null, geo: null, name: null };
-      if (!b.risk) return b;
+      const b = { id: (side === 'in' ? 'S_in@' : 'S_out@') + ramp.id, side, edge: ramp.id, risk: gi.risk.has(ramp.id), status: 'normal', via: null, pattern: null, geo: null, name: null, diag: null };
+      const diagOf = ne => (hasLegs ? boundaryDiag(gi, side, ramp, ctx.h, ctx.legs, ne || nameEvidence(gi, side, ramp, ctx.h, ctx.legs, sPt, cfg)) : null);   // 1.1.1 診断。判定には使わない
+      if (!b.risk) { if (ctx && ctx.diagAll) b.diag = diagOf(null); return b; }
       b.geo = egeoCover(gi, ramp, creditedT, cfg);
-      if (b.geo.ok) { b.status = 'geo'; b.via = 'E-geo'; return b; }
-      const ne = ctx && ctx.legs ? nameEvidence(gi, side, ramp, ctx.h, ctx.legs, sPt, cfg) : { ok: false, conds: null, pattern: null, why: ['NO_STEPS'] };
+      if (b.geo.ok) { b.status = 'geo'; b.via = 'E-geo'; b.diag = diagOf(null); return b; }
+      const ne = hasLegs ? nameEvidence(gi, side, ramp, ctx.h, ctx.legs, sPt, cfg) : { ok: false, conds: null, pattern: null, why: ['NO_STEPS'] };
       b.name = { ok: ne.ok, conds: ne.conds, why: ne.why };
       if (ne.ok) { b.status = 'name'; b.via = 'E-name'; b.pattern = ne.pattern; } else b.status = 'unresolved';
+      if (hasLegs) b.diag = diagOf(ne);
       return b;
     };
     return [mk('in', edges[0], nIn, cred.first), mk('out', edges[edges.length - 1], nOut, cred.last)];
@@ -1040,12 +1150,12 @@
     if (d0 !== null && d0 > cfg.END_M) return r('不一致', 'SURF_START');
     if (d1 !== null && d1 > cfg.END_M) return r('不一致', 'SURF_END');
     const surfToll = leg.tollPresent || leg.tollSteps > 0;           // @M3
-    if (surfToll) return r('判定不能', 'SURF_TOLL');
+    if (surfToll) return Object.assign(r('判定不能', 'SURF_TOLL'), { diag: surfaceTollDiag(leg) });      // 1.1.1 診断：leg の tollInfo／「有料区間」を含む step の添字
     return r('一致', 'OK');
   }
 
   /** 候補全体の照合：全 leg 一致→一致、1 leg でも不一致→不一致、それ以外→判定不能 */
-  function matchCandidate(gi, cand, legs, cfg) {
+  function matchCandidate(gi, cand, legs, cfg, dopts) {
     cfg = cfg || CONFIG;
     const n = cand.rides.length, expected = 2 * n + 1;
     if (!Array.isArray(legs) || legs.length !== expected) {
@@ -1057,7 +1167,7 @@
       const ride = cand.rides[(i - 1) / 2];
       let pts = null, r;
       if (legs[i].polyline) { try { pts = decodePolyline(legs[i].polyline); } catch (e) { r = { verdict: '判定不能', reason: 'POLY_INVALID' }; } }
-      if (!r) r = matchRide(gi, ride, pts, cfg, { legs, h: i });
+      if (!r) r = matchRide(gi, ride, pts, cfg, { legs, h: i, diagAll: !!(dopts && dopts.diagAll) });
       results.push(Object.assign({ index: i, type: 'highway', ride: (i - 1) / 2 }, r));
     }
     const verdict = results.some(x => x.verdict === '不一致') ? '不一致' : results.every(x => x.verdict === '一致') ? '一致' : '判定不能';
@@ -1131,9 +1241,9 @@
     if (q.kind === 'full') {
       const cand = q.candidate;
       out.timeDependency = timeDependencyOf(gi, cand, flags.timeDependency);
-      const m = matchCandidate(gi, cand, legs, cfg);
+      const m = matchCandidate(gi, cand, legs, cfg, { diagAll: !!(q.inject && q.inject.diagAll) });
       out.match = m.verdict;
-      meta.match = { verdict: m.verdict, reasons: m.reasons, legs: m.legs.map(l => ({ i: l.index, type: l.type, verdict: l.verdict, reason: l.reason, score: l.score, startD: l.startD, endD: l.endD })), boundaries: m.boundaries };
+      meta.match = { verdict: m.verdict, reasons: m.reasons, legs: m.legs.map(l => ({ i: l.index, type: l.type, verdict: l.verdict, reason: l.reason, score: l.score, startD: l.startD, endD: l.endD, diag: l.diag || null })), boundaries: m.boundaries };
       meta.names = rideNames(gi, cand);
       if (flags.keepPolyline) meta.polylines = legs.map(l => l.polyline || null);
     } else if (q.kind === 'split') {
@@ -1364,7 +1474,7 @@
           return done({ error: 'DEGENERATE', message: '退化候補（同一IC・同方向で入って出る乗車）は 5a の評価対象外', retryable: false, fatal: false, meta: mkMeta({ stage: 'DEGENERATE', degenerate: { r1Rides: dg } }) });
         }
       }
-      const req = buildRequest(gi, q, { carrySec: carry, omitTollInfo: !!(q.inject && q.inject.omitTollInfo), vehicleStopover: !!(q.inject && q.inject.vehicleStopover), cfg });
+      const req = buildRequest(gi, q, { carrySec: carry, omitTollInfo: !!(q.inject && q.inject.omitTollInfo), vehicleStopover: !!(q.inject && q.inject.vehicleStopover), avoidTolls: !!(q.inject && q.inject.avoidTolls), cfg });
       if (!req.ok) { state.counters.rejectedV1++; return done({ error: req.error, message: req.message, meta: mkMeta({ stage: 'V1' }) }); }
       const reqMeta = { points: compactPoints(req.points), intermediates: req.intermediates, expectedLegs: req.expectedLegs, departureTime: req.departureTime, modifiers: req.modifiers, fieldMaskHasToll: req.fieldMaskHasToll, tollsRequested: req.tollsRequested, variant: req.variant, vehicleStopover: req.vehicleStopover };
       // V5：各送信の直前に出発時刻の期限を確認。期限切れは送信せず停止
@@ -1564,11 +1674,30 @@
           const p = path + '.' + k;
           if (CARRY_FORBIDDEN_KEYS.indexOf(k) >= 0) bad.push(p);
           else if ((k === 'lat' || k === 'lng') && !inCond) bad.push(p);
+          else if (k === 'diag' || k === 'legDiag') diagViolations(v[k], p).forEach(x => bad.push(x));
           walk(v[k], p, inCond || k === 'cond');
         }
       }
     };
     walk(obj, '$', false);
+    return bad;
+  }
+  /**
+   * 1.1.1 診断（diag・legDiag）の形の検査：値は 非負の整数（9999 以下）・真偽・null・[A-Za-z0-9_.,:@+=-] だけの文字列・それらの配列・オブジェクトに限る。
+   * 日本語・空白・記号類を含む文字列（＝案内文の断片）や小数（＝座標・距離・秒）、DIAG_KEYS にないキーは違反。違反のキー経路の配列を返す
+   */
+  const DIAG_KEYS = Object.freeze(['hn', 'an', 'ei', 'mv', 'cd', 'nf', 'pm', 'pt', 'cf', 'hf', 'af', 'leg', 'step', 'tail', 'p', 'type', 'n', 'fails', 'ti', 'ts']);
+  function diagViolations(v, path) {
+    const bad = [];
+    const walk = (x, p) => {
+      if (x === null || typeof x === 'boolean') return;
+      if (typeof x === 'number') { if (!(Number.isInteger(x) && x >= 0 && x <= 9999)) bad.push(p); return; }
+      if (typeof x === 'string') { if (!/^[A-Za-z0-9_.,:@+=\-]{0,4000}$/.test(x)) bad.push(p); return; }
+      if (Array.isArray(x)) { x.forEach((y, i) => walk(y, p + '[' + i + ']')); return; }
+      if (typeof x === 'object') { for (const k of Object.keys(x)) { if (DIAG_KEYS.indexOf(k) < 0) bad.push(p + '.' + k); else walk(x[k], p + '.' + k); } return; }
+      bad.push(p);
+    };
+    walk(v, path);
     return bad;
   }
   const rideLabel = (gi, r) => {
@@ -1601,7 +1730,8 @@
         condition: resp.condition || null, fallback: !!(m.fallback || resp.fallback), timeDependency: resp.timeDependency || null,
         match: resp.match === undefined ? null : resp.match,
         matchReasons: mm ? mm.reasons.slice() : [],
-        boundaries: mm && mm.boundaries ? mm.boundaries.map(b => ({ ride: b.ride, id: b.id, side: b.side, risk: !!b.risk, status: b.status, via: b.via, pattern: b.pattern, name: b.name && b.name.conds ? b.name.conds : null })) : [],
+        boundaries: mm && mm.boundaries ? mm.boundaries.map(b => ({ ride: b.ride, id: b.id, side: b.side, risk: !!b.risk, status: b.status, via: b.via, pattern: b.pattern, name: b.name && b.name.conds ? b.name.conds : null, diag: b.diag ? clone(b.diag) : null })) : [],
+        legDiag: mm ? mm.legs.filter(l => l.verdict !== '一致' && l.diag).map(l => Object.assign({ leg: l.i, type: l.type }, clone(l.diag))) : [],
         group: mm ? mm.legs.filter(l => l.score && l.score.group).map(l => ({ leg: l.i, in: l.score.group.in, out: l.score.group.out })) : [],
         request: rq ? { variant: rq.variant || 'V-a', vehicleStopover: !!rq.vehicleStopover, intermediates: rq.intermediates, expectedLegs: rq.expectedLegs, departureTime: rq.departureTime, points: rq.points } : null,
       };
@@ -1641,12 +1771,15 @@
   function callLogLine(c) {
     const slot = c.kind === 'split' ? ('s' + c.section + '/' + c.sections) : (c.slot || '-');
     const mt = c.match ? c.match + (c.matchReasons.length ? '[' + c.matchReasons.join(',') + ']' : '') : '-';
-    const bd = c.boundaries.length ? c.boundaries.map(b => b.side + ':' + (b.risk ? 'R' : 'N') + ':' + b.status + (b.pattern ? '(' + b.pattern + ')' : '')).join('/') : '-';
+    const bd0 = c.boundaries.length ? c.boundaries.map(b => b.side + ':' + (b.risk ? 'R' : 'N') + ':' + b.status + (b.pattern ? '(' + b.pattern + ')' : '') + diagCode(b.diag)).join('/') : '';
+    const ld = (c.legDiag || []).map(legDiagCode).join(' ');                       // 1.1.1：非一致 leg の内訳（SURF_TOLL・失敗検査）
+    const bd = (bd0 && ld) ? bd0 + ' ' + ld : (bd0 || ld || '-');
     return [c.seq, c.kind, slot, c.candidateId || '-', c.attempt || '-', yn(c.retry), c.http === null ? (c.sent === false ? '未送信' : '-') : c.http, c.ms === null ? '-' : c.ms,
       c.deadlineOk === null ? '-' : (c.deadlineOk ? 'ok' : 'NG'), c.tollState || '-', c.fullTripFare === null ? '-' : (yn(c.fullTripFare) + (c.fareCodes.length ? '(' + c.fareCodes.join(',') + ')' : '')),
       mt, bd, c.condition || (c.failReason ? 'ERR:' + c.failReason : '-'), yn(c.fallback), c.timeDependency || '-', c.request ? (c.request.intermediates + (c.request.variant !== 'V-a' ? '/' + c.request.variant : '')) : '-'].join('|');
   }
-  const CALL_LOG_HEADER = '呼出ログ（seq|kind|slot|候補ID|attempt|retry|HTTP|ms|期限確認|料金状態|全旅程料金(規則)|照合[理由]|境界(S_in/S_out:R=吸着リスク/N=通常:根拠)|条件|fallback|時刻依存|点数/変種）';
+  const CALL_LOG_HEADER = '呼出ログ（seq|kind|slot|候補ID|attempt|retry|HTTP|ms|期限確認|料金状態|全旅程料金(規則)|照合[理由]|境界(S_in/S_out:R=吸着リスク/N=通常:根拠{診断}と非一致legの内訳)|条件|fallback|時刻依存|点数/変種）';
+  const DIAG_LEGEND = '診断凡例(1.1.1。案内文の文字列・座標・距離は含まない): 境界{hn=高速legのstep数;an=隣接一般道legのstep数;ei=E-nameが見たstepの末尾からの位置(0=最後);mv=そのstepのmaneuver列挙名;cd=E-name条件a〜eのうち真;nf=IC名を含む最初のstep(L=leg,s=添字,t=末尾からの位置);pm=文型表に一致したstep(leg,step:文型);pt=E-nameが見たstepの文型(NONE=不一致);cf=(c)の失敗区分(OK=失敗なし);hf/af=stepごとのフラグ(N=IC名 D=出口 I=入口 R=ランプ J=JCT T=有料区間 H=方面 W=IC名+空白+出口 V=IC名+空白+入口 .=なし)} ／非一致leg L<i>{n=step数;f=失敗した検査;mv=maneuver略号(RL=RAMP_LEFT RR=RAMP_RIGHT MG=MERGE FL/FR=FORK ST=STRAIGHT TL/TR=TURN 他はREADME)} ／一般道leg L<i>{ti=legのtollInfo有;ts=有料区間を含むstep添字;n=step数}';
   const ATTRIBUTION = '帰属: 経路・所要時間・料金は Google Maps（Routes API）による ／ Contains information from OpenStreetMap, which is made available here under the Open Database License (ODbL). © OpenStreetMap contributors ／ 『国土数値情報（高速道路時系列データ）』（国土交通省）を加工して作成 (CC BY 4.0)';
   const CARRY_NOTICE = '持ち出し範囲(v2.3 §3): この記録は検証合否・理由コード・自社生成情報・件数集計のみ。Google 由来の所要時間・料金・距離・案内文・経路形状・緯度経度（とその区分値）は含まない（画面表示はセッション中のみ）。保存の適法性を認定したものではない';
 
@@ -1663,6 +1796,7 @@
     if (carry.rank.direct) L.push(' 直行代表: 母集団' + carry.rank.direct.population + '件 代表 ' + (carry.rank.direct.reps.join(' ／ ') || 'なし'));
     L.push(' ' + CALL_LOG_HEADER);
     carry.calls.forEach(c => L.push('  ' + callLogLine(c)));
+    if (carry.calls.some(c => (c.legDiag && c.legDiag.length) || c.boundaries.some(b => b.diag))) L.push(' ' + DIAG_LEGEND);
     L.push(' 予算: used ' + carry.budget.used + '/' + carry.budget.B + ' retries ' + carry.budget.retriesUsed + ' waits [' + carry.budget.waitsMs.join(',') + ']' + (carry.stopped ? ' 停止=' + carry.stopped : ''));
     const t = carry.tally;
     L.push(' 検証集計(現世代の全旅程評価): 照合 一致' + t.match.一致 + '／不一致' + t.match.不一致 + '／判定不能' + t.match.判定不能 + ' ・境界 通常' + t.boundary.normal + '／E-geo' + t.boundary.geo + '／E-name' + t.boundary.name + '／未確認' + t.boundary.unresolved +
@@ -1742,6 +1876,8 @@
     // v1.1.0 追加
     groupAttribution, uniqueSections, egeoCover, graphInfo, distToCompetitors, nameOperand, nameEvidence, NAME_PATTERNS, NAME_PATTERN_TABLE_VERSION, icNameForms,
     isR1Ride, r1Rides, hasR2, partitionDegenerate, viaPointsOf, CARRY_FORBIDDEN_KEYS, REASON_LABEL, CARRY_NOTICE,
+    // v1.1.1 追加（診断）
+    DIAG_VERSION, DIAG_LEGEND, MANEUVER_ENUMS, MANEUVER_ABBR, maneuverCode, stepFlags, boundaryDiag, highwayLegDiag, surfaceTollDiag, diagCode, legDiagCode, diagViolations,
   };
   root.RF7Adapter = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
