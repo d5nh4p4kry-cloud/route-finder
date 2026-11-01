@@ -28,7 +28,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 'rf7-adapter-1.2.0';
+  const VERSION = 'rf7-adapter-1.2.1';
 
   // ================================================================ 固定設定（§5.2 V2 の閾値は実行前に固定。変更は理由付きで全件再判定）
   const CONFIG = Object.freeze({
@@ -64,6 +64,7 @@
     GROUP_GAP_M: 25,        // 群内帰属（v2.2 §5.1）：予定端点の方が 25 m 以上近ければ確定
     NAME_NEAR_M: 300,       // 1.1.1 までの入口 E-name (a) の値。1.2.0 では入口の E-name を評価しないため未使用（設定の互換のため残す）
     NAME_POS_M: 25,         // E-name (c)（1.2.0）：出口操作 step の始点が予定ランプの分流点から 25 m 以内、かつ他の出口ランプ・JCT 連絡路の分流点から 25 m 超（または予定の方が 25 m 以上近い）
+    NAME_DIV_NEAR_M: 150,   // E-name (c)（1.2.1、実機 2026-11-02 で 25 m では全件 POS_NEAR）：出口操作 step の始点が予定ランプの分流点から 150 m 以内、かつ予定の分流点が他のどの分流点よりも NAME_POS_M 以上近い（最寄りの分流点であること）
     NAME_HEAD_M: 50,        // E-name (c)（1.2.0）：出口操作 step の進行方位を求める区間の長さ（step の最初の 50 m）
     NAME_HEAD_DEG: 45,      // E-name (c)（1.2.0）：その進行方位と予定ランプの via_heading の差の許容
     EDGE_MISS_POS: 0.5,     // 予定辺を 1 本まるごと外れた（EDGE_COVER）とき、posRate がこれ以上なら「別経路を走った」＝不一致（README の解釈）
@@ -857,7 +858,7 @@
   }
   /** (c) の一部：操作地点 p0 が予定の分流点から dX。他の分流点のどれからも NAME_POS_M 超、または予定の方が NAME_POS_M 以上近い */
   function divergeClear(gi, ramp, p0, dX, cfg) {
-    for (const o of divergeOthers(gi, ramp)) { const dY = haversineM(p0, o); if (!(dY > cfg.NAME_POS_M || dX <= dY - cfg.NAME_POS_M)) return false; }
+    for (const o of divergeOthers(gi, ramp)) { const dY = haversineM(p0, o); if (!(dX <= dY - cfg.NAME_POS_M)) return false; }  // 1.2.1：予定の分流点が最寄り（他より NAME_POS_M 以上近い）
     return true;
   }
   /** polyline の最初の m [m] の進行方位（始点から m 進んだ点への方位。全長が m 未満なら終点まで）。5 m 未満しか進めない・点が 2 未満なら null */
@@ -904,7 +905,7 @@
     const p0 = pts.length ? pts[0] : st.start, dv = gi.nodes.get(mainNodeIdOf(ramp));
     if (p0 && dv) {
       const dX = haversineM(p0, dv);
-      const near = dX <= cfg.NAME_POS_M;
+      const near = dX <= cfg.NAME_DIV_NEAR_M;
       const clear = divergeClear(gi, ramp, p0, dX, cfg); // @M11
       const hd = startHeading(pts, cfg.NAME_HEAD_M);
       const headOk = hd !== null && isNum(ramp.via_heading) && angDiff(hd, ramp.via_heading) <= cfg.NAME_HEAD_DEG;
