@@ -28,7 +28,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 'rf7-adapter-1.2.1';
+  const VERSION = 'rf7-adapter-1.3.0';
 
   // ================================================================ 固定設定（§5.2 V2 の閾値は実行前に固定。変更は理由付きで全件再判定）
   const CONFIG = Object.freeze({
@@ -64,6 +64,8 @@
     GROUP_GAP_M: 25,        // 群内帰属（v2.2 §5.1）：予定端点の方が 25 m 以上近ければ確定
     NAME_NEAR_M: 300,       // 1.1.1 までの入口 E-name (a) の値。1.2.0 では入口の E-name を評価しないため未使用（設定の互換のため残す）
     NAME_POS_M: 25,         // E-name (c)（1.2.0）：出口操作 step の始点が予定ランプの分流点から 25 m 以内、かつ他の出口ランプ・JCT 連絡路の分流点から 25 m 超（または予定の方が 25 m 以上近い）
+    CONN_GAP_M: 15, CONN_DIR_DEG: 135, CONN_WIN_M: 30, CONN_HWY_WIN_M: 60, CONN_HWY_M: 25,   // 1.3.0 分割評価の接続検査 J1・J2（計画 v2.5.1 §2.3。CONN_HWY は本線・JCT 連絡路との距離）
+    SPLIT_TIME_MIN_SEC: 120, SPLIT_TIME_FRAC: 0.05,                                       // 1.3.0 分割評価の時間差の許容 C：max(2 分, 全旅程の 5%)
     NAME_DIV_NEAR_M: 150,   // E-name (c)（1.2.1、実機 2026-11-02 で 25 m では全件 POS_NEAR）：出口操作 step の始点が予定ランプの分流点から 150 m 以内、かつ予定の分流点が他のどの分流点よりも NAME_POS_M 以上近い（最寄りの分流点であること）
     NAME_HEAD_M: 50,        // E-name (c)（1.2.0）：出口操作 step の進行方位を求める区間の長さ（step の最初の 50 m）
     NAME_HEAD_DEG: 45,      // E-name (c)（1.2.0）：その進行方位と予定ランプの via_heading の差の許容
@@ -1233,6 +1235,117 @@
     return { verdict, reasons, legs: results, boundaries };
   }
 
+  // ================================================================ 1.3.0 分割評価（検証専用。計画 v2.5.1 §2.3。engine の判定は変えない）
+  let trunkCache = null;
+  function trunkComps(gi) {
+    if (trunkCache && trunkCache.gi === gi) return trunkCache.list;
+    const list = gi.graph.edges.filter(isTrunkEdge).map(x => ({ id: x.id, g: edgeGeom(gi, x) })).filter(x => x.g && x.g.length >= 2);
+    trunkCache = { gi, list };
+    return list;
+  }
+  /** 点 pt から本線・JCT 連絡路の形状までの最短距離（m） */
+  function distToTrunk(gi, pt) {
+    const proj = projector(pt.lat, pt.lng);
+    return compDist([0, 0], projectComps(trunkComps(gi), proj), -1);
+  }
+  /** 折れ線の先頭（fromEnd=false）または末尾（true）から m [m] の部分 */
+  function polyPart(pts, m, fromEnd) {
+    const a = fromEnd ? pts.slice().reverse() : pts;
+    const out = [a[0]];
+    let acc = 0;
+    for (let i = 1; i < a.length; i++) {
+      const L = haversineM(a[i - 1], a[i]);
+      if (acc + L >= m) { const t = L > 0 ? (m - acc) / L : 0; out.push({ lat: a[i - 1].lat + (a[i].lat - a[i - 1].lat) * t, lng: a[i - 1].lng + (a[i].lng - a[i - 1].lng) * t }); break; }
+      out.push(a[i]); acc += L;
+    }
+    return fromEnd ? out.reverse() : out;
+  }
+  function polyBearing(pts) {
+    if (!pts || pts.length < 2) return null;
+    const a = pts[0], b = pts[pts.length - 1];
+    if (haversineM(a, b) < 1) return null;
+    const proj = projector(a.lat, a.lng), q = proj(b.lat, b.lng);
+    let d = Math.atan2(q[0], q[1]) * 180 / Math.PI; if (d < 0) d += 360;
+    return d;
+  }
+  function samplesAlong(pts, step) {
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const L = haversineM(pts[i - 1], pts[i]), n = Math.max(1, Math.ceil(L / step));
+      for (let k = 1; k <= n; k++) out.push({ lat: pts[i - 1].lat + (pts[i].lat - pts[i - 1].lat) * k / n, lng: pts[i - 1].lng + (pts[i].lng - pts[i - 1].lng) * k / n });
+    }
+    return out;
+  }
+  /**
+   * 境目の接続検査 J（v2.5.1 §2.3）。side='in'：S0 の末尾 → S1 の先頭（入口ランプ ramp）。side='out'：S1 の末尾 → S2 の先頭（出口ランプ ramp）。
+   * (i) 境目の距離 ≤ CONN_GAP_M、(ii) 境目の前後 CONN_WIN_M の方位差 ≤ CONN_DIR_DEG、(iii) 一般道側の CONN_HWY_WIN_M が本線・JCT 連絡路から CONN_HWY_M 超、(iv) E-geo のない吸着リスク端点でない。
+   * (iii) の対象から同じ IC のランプを外すのは、一般道側端点は同じ IC の他のランプと隣り合うのが普通で、正しい進入も不合格になるため（1.3.0 実装時の判断。計画の「ランプ」を除外）。高速側から来た場合は料金の検査 A で検出する。
+   * 戻り値 { ok, code }。code は CONN_GAP／CONN_DIR／CONN_HWY／CONN_RISK（いずれも判定不能扱い）
+   */
+  function connCheck(gi, ramp, side, prevPts, nextPts, cfg) {
+    cfg = cfg || CONFIG;
+    if (!prevPts || prevPts.length < 2 || !nextPts || nextPts.length < 2) return { ok: false, code: 'CONN_NOPOLY' };
+    if (gi.risk.has(ramp.id) && !uniqueSections(gi, ramp, cfg).length) return { ok: false, code: 'CONN_RISK' };
+    const gap = haversineM(prevPts[prevPts.length - 1], nextPts[0]);
+    if (!(gap <= cfg.CONN_GAP_M)) return { ok: false, code: 'CONN_GAP' };
+    const b0 = polyBearing(polyPart(prevPts, cfg.CONN_WIN_M, true)), b1 = polyBearing(polyPart(nextPts, cfg.CONN_WIN_M, false));
+    if (b0 !== null && b1 !== null && angDiff(b0, b1) > cfg.CONN_DIR_DEG) return { ok: false, code: 'CONN_DIR' };
+    const surf = side === 'in' ? polyPart(prevPts, cfg.CONN_HWY_WIN_M, true) : polyPart(nextPts, cfg.CONN_HWY_WIN_M, false);
+    if (samplesAlong(surf, 5).some(p => distToTrunk(gi, p) <= cfg.CONN_HWY_M)) return { ok: false, code: 'CONN_HWY' };
+    return { ok: true, code: 'OK' };
+  }
+  /** 時間差の検査 C：分割合計 splitSec と全旅程 fullSec の差が max(SPLIT_TIME_MIN_SEC, fullSec×SPLIT_TIME_FRAC) 以内 */
+  function splitTimeOk(splitSec, fullSec, cfg) {
+    cfg = cfg || CONFIG;
+    if (!isNum(splitSec) || !isNum(fullSec)) return null;
+    return Math.abs(splitSec - fullSec) <= Math.max(cfg.SPLIT_TIME_MIN_SEC, fullSec * cfg.SPLIT_TIME_FRAC);
+  }
+  /**
+   * 分割評価（乗車 1 回、3 区間）の検査 A・B・D・J1・J2 と分割後の判定。secs：区間 0〜2 の応答（interpret の出力＋split 情報）。dep0Ms：検索の出発時刻。
+   * 戻り値は合否・理由コードと、セッション内でだけ使う値 session（所要合計・S1 料金）。session は列挙されない。
+   */
+  function evalSplit(gi, cand, secs, dep0Ms, cfg) {
+    cfg = cfg || CONFIG;
+    const out = { A: null, B: null, D: null, J1: null, J2: null, verdict: '判定不能', reasons: [] };
+    Object.defineProperty(out, 'session', { value: { durationSec: null, s1Jpy: null, s1TollState: null }, enumerable: false, writable: true });
+    if (!cand || !cand.rides || cand.rides.length !== 1) { out.reasons.push('SPLIT_RIDES'); return out; }
+    if (!Array.isArray(secs) || secs.length !== 3 || secs.some(x => !x || x.error || !Array.isArray(x.sectionLegs) || x.sectionLegs.length !== 1)) { out.reasons.push('SPLIT_INCOMPLETE'); return out; }
+    const L0 = secs[0].sectionLegs[0], L1 = secs[1].sectionLegs[0], L2 = secs[2].sectionLegs[0];
+    const ride = cand.rides[0], on = gi.edges.get(ride.on), off = gi.edges.get(ride.off);
+    // 一般道区間（S0・S2）：端点の位置と料金（A）
+    const s0 = matchSurface(gi, cand, 0, L0, cfg), s2 = matchSurface(gi, cand, 2, L2, cfg);
+    const tollFail = [];
+    if (s0.reason === 'SURF_TOLL' || secs[0].contaminated) tollFail.push('S0');
+    if (s2.reason === 'SURF_TOLL' || secs[2].contaminated) tollFail.push('S2');
+    out.A = { ok: tollFail.length === 0, code: tollFail.length ? 'SPLIT_SURF_TOLL:' + tollFail.join('+') : 'OK' };
+    if (!out.A.ok) out.reasons.push('A:' + out.A.code);
+    [['S0', s0], ['S2', s2]].forEach(([k, r]) => { if (r.verdict === '不一致') out.reasons.push(k + ':' + r.reason); else if (r.verdict === '判定不能' && r.reason !== 'SURF_TOLL') out.reasons.push(k + ':' + r.reason); });
+    // 時刻の引継ぎ（B）
+    const d0 = secs[0].durationSec, d1 = secs[1].durationSec, d2 = secs[2].durationSec;
+    const sp = i => secs[i].split || {};
+    const bOk = isNum(dep0Ms) && isNum(d0) && isNum(d1) && sp(0).departureMs === dep0Ms && sp(1).departureMs === dep0Ms + Math.round(d0 * 1000) && sp(2).departureMs === dep0Ms + Math.round((d0 + d1) * 1000);
+    out.B = { ok: !!bOk, code: bOk ? 'OK' : 'SPLIT_CARRY' };
+    if (!bOk) out.reasons.push('B:SPLIT_CARRY');
+    // 高速区間（S1）の照合（D）：全旅程の高速 leg と同じ照合。E-name の「隣の一般道 leg」には S2 を渡す
+    let pts1 = null, d;
+    try { pts1 = L1.polyline ? decodePolyline(L1.polyline) : null; } catch (e) { d = { verdict: '判定不能', reason: 'POLY_INVALID' }; }
+    if (!d) d = matchRide(gi, ride, pts1, cfg, { legs: [L1, L2], h: 0 });
+    out.D = { verdict: d.verdict, code: d.reason };
+    if (d.verdict !== '一致') out.reasons.push('D:' + d.reason);
+    // 境目の接続（J1・J2）
+    let p0 = null, p2 = null;
+    try { p0 = L0.polyline ? decodePolyline(L0.polyline) : null; p2 = L2.polyline ? decodePolyline(L2.polyline) : null; } catch (e) { /* CONN_NOPOLY */ }
+    out.J1 = connCheck(gi, on, 'in', p0, pts1, cfg);
+    out.J2 = connCheck(gi, off, 'out', pts1, p2, cfg);
+    if (!out.J1.ok) out.reasons.push('J1:' + out.J1.code);
+    if (!out.J2.ok) out.reasons.push('J2:' + out.J2.code);
+    const bad = s0.verdict === '不一致' || s2.verdict === '不一致' || d.verdict === '不一致';
+    const good = out.A.ok && s0.verdict === '一致' && s2.verdict === '一致' && d.verdict === '一致' && out.J1.ok && out.J2.ok;
+    out.verdict = bad ? '不一致' : good ? '一致' : '判定不能';
+    out.session = { durationSec: isNum(d0) && isNum(d1) && isNum(d2) ? d0 + d1 + d2 : null, s1Jpy: secs[1].toll && secs[1].toll.state === 'priced' ? secs[1].toll.jpy : null, s1TollState: secs[1].toll ? secs[1].toll.state : null };
+    return out;
+  }
+
   // ================================================================ 応答の解釈（REST 応答 → engine の内部形式）
   const JCT_RE = /[^\s　、。（）()「」\/]{1,15}JCT/g;
   const IC_RE = /[^\s　、。（）()「」\/]{1,15}(?:IC|ＩＣ|インターチェンジ)/g;
@@ -1307,6 +1420,7 @@
       out.sectionType = surface ? 'surface' : 'highway';
       out.contaminated = surface && (toll.state !== 'free' || legs.some(l => l.tollPresent || l.tollSteps > 0));
       out.match = null;
+      Object.defineProperty(out, 'sectionLegs', { value: legs, enumerable: false });   // 1.3.0：分割評価の検査（evalSplit）用。セッション内のみ（列挙されないので JSON・持ち出しに出ない）
       if (flags.keepPolyline) meta.polylines = legs.map(l => l.polyline || null);
     } else {
       out.match = null; out.timeDependency = 'なし';
@@ -1573,6 +1687,7 @@
       let res;
       try { res = interpret(gi, q, req, raw.json, cfg, flags); } catch (e) { return done({ error: 'BAD_RESPONSE', message: '応答の解釈に失敗：' + String((e && e.message) || e), meta: meta0 }); }
       res.meta = Object.assign(res.meta, meta0);
+      if (q.kind === 'split') res.split = { section: q.section, carrySec: carry, departureMs: req.departureMs };   // 1.3.0：時刻引継ぎの検査 B 用（自社の要求値）
       if (q.kind === 'split' && typeof res.durationSec === 'number') {
         const mk = q.searchId + '|' + q.generation + '|' + q.candidateId;
         const memo = state.splitMemo.get(mk) || [];
@@ -1930,7 +2045,7 @@
     classifyHttp, createLimiter, mockValue, createAdapter,
     exportSearch, carryOut, carryHeader, checkCarryClean, decorateLines, callLogLine, formatSearchText, formatReport, testCRows, reasonWithLabel, refineReasons,
     // v1.1.0 追加
-    groupAttribution, uniqueSections, egeoCover, graphInfo, distToCompetitors, nameOperand, nameEvidence, NAME_PATTERNS, NAME_PATTERN_TABLE_VERSION, icNameForms,
+    groupAttribution, uniqueSections, egeoCover, graphInfo, distToCompetitors, distToTrunk, connCheck, splitTimeOk, evalSplit, polyPart, nameOperand, nameEvidence, NAME_PATTERNS, NAME_PATTERN_TABLE_VERSION, icNameForms,
     // v1.2.0 追加（出口 E-name）
     exitStepIndex, divergeOthers, divergeClear, startHeading, EXIT_STEP_MANEUVERS,
     isR1Ride, r1Rides, hasR2, partitionDegenerate, viaPointsOf, CARRY_FORBIDDEN_KEYS, REASON_LABEL, CARRY_NOTICE,
