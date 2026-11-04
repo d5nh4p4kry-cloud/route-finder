@@ -28,7 +28,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 'rf7-adapter-1.3.0';
+  const VERSION = 'rf7-adapter-1.3.1';
 
   // ================================================================ 固定設定（§5.2 V2 の閾値は実行前に固定。変更は理由付きで全件再判定）
   const CONFIG = Object.freeze({
@@ -1276,12 +1276,7 @@
     }
     return out;
   }
-  /**
-   * 境目の接続検査 J（v2.5.1 §2.3）。side='in'：S0 の末尾 → S1 の先頭（入口ランプ ramp）。side='out'：S1 の末尾 → S2 の先頭（出口ランプ ramp）。
-   * (i) 境目の距離 ≤ CONN_GAP_M、(ii) 境目の前後 CONN_WIN_M の方位差 ≤ CONN_DIR_DEG、(iii) 一般道側の CONN_HWY_WIN_M が本線・JCT 連絡路から CONN_HWY_M 超、(iv) E-geo のない吸着リスク端点でない。
-   * (iii) の対象から同じ IC のランプを外すのは、一般道側端点は同じ IC の他のランプと隣り合うのが普通で、正しい進入も不合格になるため（1.3.0 実装時の判断。計画の「ランプ」を除外）。高速側から来た場合は料金の検査 A で検出する。
-   * 戻り値 { ok, code }。code は CONN_GAP／CONN_DIR／CONN_HWY／CONN_RISK（いずれも判定不能扱い）
-   */
+  /** 接続検査 J（v2.5.1 §2.3）：(i) 境目 ≤CONN_GAP_M (ii) 方位差 ≤CONN_DIR_DEG (iii) 一般道側が本線・JCT 連絡路から CONN_HWY_M 超（同じ IC のランプは対象外：正しい進入も落ちるため。高速から来た場合は A で検出）(iv) E-geo なしの吸着リスク端点でない */
   function connCheck(gi, ramp, side, prevPts, nextPts, cfg) {
     cfg = cfg || CONFIG;
     if (!prevPts || prevPts.length < 2 || !nextPts || nextPts.length < 2) return { ok: false, code: 'CONN_NOPOLY' };
@@ -1294,17 +1289,29 @@
     if (samplesAlong(surf, 5).some(p => distToTrunk(gi, p) <= cfg.CONN_HWY_M)) return { ok: false, code: 'CONN_HWY' };
     return { ok: true, code: 'OK' };
   }
+  /** 1.3.1（v2.5.3）確認できたゼロ区間：形状 1 点以上で全点 1 m 以内・距離 0（省略含む）・所要 0 秒・step の始終点 1 m 以内。欠落・空・短い非ゼロ区間は該当しない */
+  function isZeroSection(leg, pts) {
+    if (!leg || !Array.isArray(pts) || pts.length < 1) return false;
+    if (!pts.every(p => haversineM(p, pts[0]) <= 1)) return false;
+    if (!leg.distanceZero) return false;
+    if (leg.durationSec !== 0) return false;
+    if (Array.isArray(leg.steps) && leg.steps.some(st => st.start && st.end && haversineM(st.start, st.end) > 1)) return false;
+    return true;
+  }
+  /** ゼロ区間の境目：① 高速区間の端↔点 ② 点↔出発地／目的地、ともに CONN_GAP_M 以内（(iv) は呼出側） */
+  function connZero(hwEnd, zeroPt, terminal, cfg) {
+    if (!hwEnd || !zeroPt || !terminal) return { ok: false, code: 'CONN_NOPOLY' };
+    if (!(haversineM(hwEnd, zeroPt) <= cfg.CONN_GAP_M) || !(haversineM(zeroPt, terminal) <= cfg.CONN_GAP_M)) return { ok: false, code: 'CONN_GAP' };
+    return { ok: true, code: 'OK_ZERO' };
+  }
   /** 時間差の検査 C：分割合計 splitSec と全旅程 fullSec の差が max(SPLIT_TIME_MIN_SEC, fullSec×SPLIT_TIME_FRAC) 以内 */
   function splitTimeOk(splitSec, fullSec, cfg) {
     cfg = cfg || CONFIG;
     if (!isNum(splitSec) || !isNum(fullSec)) return null;
     return Math.abs(splitSec - fullSec) <= Math.max(cfg.SPLIT_TIME_MIN_SEC, fullSec * cfg.SPLIT_TIME_FRAC);
   }
-  /**
-   * 分割評価（乗車 1 回、3 区間）の検査 A・B・D・J1・J2 と分割後の判定。secs：区間 0〜2 の応答（interpret の出力＋split 情報）。dep0Ms：検索の出発時刻。
-   * 戻り値は合否・理由コードと、セッション内でだけ使う値 session（所要合計・S1 料金）。session は列挙されない。
-   */
-  function evalSplit(gi, cand, secs, dep0Ms, cfg) {
+  /** 分割評価（乗車 1 回・3 区間）の検査 A・B・D・J1・J2 と判定。session（所要合計・S1 料金）は非列挙でセッション内のみ */
+  function evalSplit(gi, cand, secs, dep0Ms, cfg, cond) {
     cfg = cfg || CONFIG;
     const out = { A: null, B: null, D: null, J1: null, J2: null, verdict: '判定不能', reasons: [] };
     Object.defineProperty(out, 'session', { value: { durationSec: null, s1Jpy: null, s1TollState: null }, enumerable: false, writable: true });
@@ -1335,8 +1342,11 @@
     // 境目の接続（J1・J2）
     let p0 = null, p2 = null;
     try { p0 = L0.polyline ? decodePolyline(L0.polyline) : null; p2 = L2.polyline ? decodePolyline(L2.polyline) : null; } catch (e) { /* CONN_NOPOLY */ }
-    out.J1 = connCheck(gi, on, 'in', p0, pts1, cfg);
-    out.J2 = connCheck(gi, off, 'out', pts1, p2, cfg);
+    // 1.3.1：ゼロ区間は (iv) の後に ①②（cond が無ければ特例なし）
+    const riskNoGeo = ramp => gi.risk.has(ramp.id) && !uniqueSections(gi, ramp, cfg).length;
+    const z0 = !!(cond && cond.origin) && isZeroSection(L0, p0), z2 = !!(cond && cond.destination) && isZeroSection(L2, p2);
+    out.J1 = z0 ? (riskNoGeo(on) ? { ok: false, code: 'CONN_RISK' } : connZero(pts1 && pts1[0], p0[0], cond.origin, cfg)) : connCheck(gi, on, 'in', p0, pts1, cfg);
+    out.J2 = z2 ? (riskNoGeo(off) ? { ok: false, code: 'CONN_RISK' } : connZero(pts1 && pts1[pts1.length - 1], p2[0], cond.destination, cfg)) : connCheck(gi, off, 'out', pts1, p2, cfg);
     if (!out.J1.ok) out.reasons.push('J1:' + out.J1.code);
     if (!out.J2.ok) out.reasons.push('J2:' + out.J2.code);
     const bad = s0.verdict === '不一致' || s2.verdict === '不一致' || d.verdict === '不一致';
@@ -1369,6 +1379,7 @@
       return {
         polyline: lg && lg.polyline && lg.polyline.encodedPolyline,
         durationSec: parseDuration(lg && lg.duration), distanceM: Number(lg && lg.distanceMeters) || null,
+        distanceZero: !!lg && (lg.distanceMeters === undefined || lg.distanceMeters === null || Number(lg.distanceMeters) === 0),   // 1.3.1：proto3 JSON では 0 は省略される
         tollPresent: ti.present, tollStatus: ti.present ? ti.status : 'none', tollJpy: ti.status === 'priced' ? ti.jpy : null,
         tollSteps, jct, ic, steps: stepView,
       };
@@ -2045,7 +2056,7 @@
     classifyHttp, createLimiter, mockValue, createAdapter,
     exportSearch, carryOut, carryHeader, checkCarryClean, decorateLines, callLogLine, formatSearchText, formatReport, testCRows, reasonWithLabel, refineReasons,
     // v1.1.0 追加
-    groupAttribution, uniqueSections, egeoCover, graphInfo, distToCompetitors, distToTrunk, connCheck, splitTimeOk, evalSplit, polyPart, nameOperand, nameEvidence, NAME_PATTERNS, NAME_PATTERN_TABLE_VERSION, icNameForms,
+    groupAttribution, uniqueSections, egeoCover, graphInfo, distToCompetitors, distToTrunk, connCheck, splitTimeOk, evalSplit, polyPart, isZeroSection, nameOperand, nameEvidence, NAME_PATTERNS, NAME_PATTERN_TABLE_VERSION, icNameForms,
     // v1.2.0 追加（出口 E-name）
     exitStepIndex, divergeOthers, divergeClear, startHeading, EXIT_STEP_MANEUVERS,
     isR1Ride, r1Rides, hasR2, partitionDegenerate, viaPointsOf, CARRY_FORBIDDEN_KEYS, REASON_LABEL, CARRY_NOTICE,
