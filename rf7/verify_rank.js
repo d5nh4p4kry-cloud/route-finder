@@ -11,7 +11,7 @@
  */
 (function (root) {
   'use strict';
-  var VERSION = 'rf7-verify-rank-1.0.0';
+  var VERSION = 'rf7-verify-rank-1.1.0';
 
   function isNum(x) { return typeof x === 'number' && isFinite(x); }
   function cmpStr(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
@@ -57,16 +57,53 @@
       return r.searchId === search.searchId && r.generation === gen && (condKey == null || r.condKey === condKey);
     }).sort(function (a, b) { return a.seq - b.seq; });
     var base = findBase(recs);
-    if (!base) return { baseOk: false, ranking: [], comparable: 0, reasons: {} };
+    if (!base) return { baseOk: false, ranking: [], comparable: 0, reasons: {}, split1: [] };
     var Tb = base.response.durationSec / 60;
     var candById = {};
     (search.candidates || []).forEach(function (c) { candById[c.id] = c; });
     var last = {};
     recs.forEach(function (r) { if (r.kind === 'full' && r.candidateId != null) last[r.candidateId] = r; });
     var rows = [], reasons = {};
+    // 1.1.0 混合方式（計画 v2.6.2 §C）：分割再評価（purpose=resplit）の 3 区間を候補・区間ごとに最後の記録で集める（engine とは別に書く）
+    var rsp = {};
+    recs.forEach(function (r) { if (r.kind === 'split' && r.purpose === 'resplit' && r.candidateId != null) { (rsp[r.candidateId] = rsp[r.candidateId] || {})[r.section] = r; } });
+    var opsOf = null;
+    if (opts.graph) { opsOf = {}; opts.graph.edges.forEach(function (e) { opsOf[e.id] = e.operator || ''; }); }
+    var maxPts = (search.options && search.options.maxIntermediates) || 25;
+    function split1(id, r, c) {
+      var x = r.response || {};
+      if (!r.ok || x.match !== '判定不能' || x.surfTollOnly !== true) return null;
+      if (!c.rides || c.rides.length !== 1 || !(c.intermediates <= maxPts)) return null;
+      var sec = rsp[id]; if (!sec) return null;
+      if (!opsOf) return { bad: 'SPLIT1_NOGRAPH' };
+      var rd = c.rides[0];
+      if (/首都高/.test(opsOf[rd.on] || '') || /首都高/.test(opsOf[rd.off] || '') || (rd.fare || []).some(function (f) { return /首都高/.test(opsOf[f] || ''); })) return { bad: 'SPLIT1_SHUTOKO' };
+      var a = sec[0], b = sec[1], z = sec[2];
+      if (!a || !b || !z) return { bad: 'SPLIT1_INCOMPLETE' };
+      var parts = [a, b, z];
+      for (var i = 0; i < 3; i++) {
+        var y = parts[i].response || {};
+        if (!parts[i].ok || y.condition !== '要求充足' || y.fallback) return { bad: 'SPLIT1_SECTION' };
+        if (!isNum(y.durationSec) || y.durationSec < 0 || (i === 1 && y.durationSec <= 0)) return { bad: 'SPLIT1_DURATION' };
+      }
+      if (!(a.response.toll && a.response.toll.state === 'free') || !(z.response.toll && z.response.toll.state === 'free')) return { bad: 'SPLIT1_SURF_TOLL' };
+      var tb = b.response.toll || {};
+      var C = tb.state === 'free' ? 0 : (tb.state === 'priced' && isNum(tb.jpy) && tb.jpy >= 0 ? tb.jpy : null);
+      if (C === null) return { bad: 'SPLIT1_TOLL' };
+      if (!(z.response.splitEval && z.response.splitEval.verdict === '一致')) return { bad: 'SPLIT1_EVAL' };
+      return { C: C, sec: a.response.durationSec + b.response.durationSec + z.response.durationSec };
+    }
+    var split1Ids = [];
     Object.keys(last).forEach(function (id) {
       var r = last[id], x = r.response || {}, c = candById[id] || {};
       var why = null;
+      var sp = split1(id, r, c);
+      if (sp && !sp.bad) {
+        if (c.restrictionUnresolved) { reasons[id] = 'RESTRICTION'; return; }
+        var d1 = Tb - sp.sec / 60;
+        if (!(d1 > 0)) { reasons[id] = 'NO_SAVING'; return; }
+        rows.push({ id: id, y: sp.C / d1, d: d1 }); split1Ids.push(id); return;
+      }
       if (!r.ok) why = 'API_FAIL';
       else if (x.match !== '一致') why = 'MATCH';
       else if (x.condition !== '要求充足') why = 'CONDITION';
@@ -83,7 +120,7 @@
     });
     var comparable = rows.length;
     rows.sort(function (a, b) { return (a.y - b.y) || (b.d - a.d) || cmpStr(a.id, b.id); });
-    return { baseOk: true, ranking: rows.slice(0, topN).map(function (r) { return r.id; }), comparable: comparable, reasons: reasons };
+    return { baseOk: true, ranking: rows.slice(0, topN).map(function (r) { return r.id; }), comparable: comparable, reasons: reasons, split1: split1Ids };
   }
 
   // 機械検査：独立再計算とアプリ表示の一致、世代分離、予算、R1、比較可能候補数
@@ -93,7 +130,7 @@
     opts = opts || {};
     var s = input.search, out = { version: VERSION, searchId: s.searchId, generation: s.generation, checks: [] };
     function chk(code, pass, detail) { out.checks.push({ code: code, pass: !!pass, detail: detail || null }); }
-    var rc = recompute(s, opts);
+    var rc = recompute(s, Object.assign({}, opts, { graph: input.graph || opts.graph }));
     var app = (input.appRanking || []).slice();
     chk('RANK_MATCH', JSON.stringify(rc.ranking) === JSON.stringify(app),
       rc.ranking.length === app.length ? null : { recomputed: rc.ranking.length, app: app.length });
@@ -128,6 +165,12 @@
       chk('NO_R1_EVALUATED', r1.length === 0, r1.length ? { ids: r1 } : null);
       if (unk.length) out.r1Unknown = unk.length;
     }
+    // 1.1.0：アプリの split1 の印と独立再計算の split1 が一致（印のない候補を split1 として数えない／その逆もない）
+    if (input.appSplit1) {
+      var a1 = input.appSplit1.slice().sort(), b1 = rc.split1.filter(function (id) { return rc.ranking.indexOf(id) >= 0; }).sort();
+      chk('SPLIT1_MATCH', JSON.stringify(a1) === JSON.stringify(b1), JSON.stringify(a1) === JSON.stringify(b1) ? null : { app: a1.length, recomputed: b1.length });
+    }
+    out.split1 = rc.split1.filter(function (id) { return rc.ranking.indexOf(id) >= 0; }).length;
     out.pass = out.checks.every(function (c) { return c.pass; });
     return out;
   }

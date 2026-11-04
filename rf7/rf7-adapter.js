@@ -28,7 +28,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 'rf7-adapter-1.3.1';
+  const VERSION = 'rf7-adapter-1.4.0';
 
   // ================================================================ 固定設定（§5.2 V2 の閾値は実行前に固定。変更は理由付きで全件再判定）
   const CONFIG = Object.freeze({
@@ -64,8 +64,8 @@
     GROUP_GAP_M: 25,        // 群内帰属（v2.2 §5.1）：予定端点の方が 25 m 以上近ければ確定
     NAME_NEAR_M: 300,       // 1.1.1 までの入口 E-name (a) の値。1.2.0 では入口の E-name を評価しないため未使用（設定の互換のため残す）
     NAME_POS_M: 25,         // E-name (c)（1.2.0）：出口操作 step の始点が予定ランプの分流点から 25 m 以内、かつ他の出口ランプ・JCT 連絡路の分流点から 25 m 超（または予定の方が 25 m 以上近い）
-    CONN_GAP_M: 15, CONN_DIR_DEG: 135, CONN_WIN_M: 30, CONN_HWY_WIN_M: 60, CONN_HWY_M: 25,   // 1.3.0 分割評価の接続検査 J1・J2（計画 v2.5.1 §2.3。CONN_HWY は本線・JCT 連絡路との距離）
-    SPLIT_TIME_MIN_SEC: 120, SPLIT_TIME_FRAC: 0.05,                                       // 1.3.0 分割評価の時間差の許容 C：max(2 分, 全旅程の 5%)
+    CONN_GAP_M: 15, CONN_DIR_DEG: 135, CONN_WIN_M: 30, CONN_HWY_WIN_M: 60, CONN_HWY_M: 25,   // 1.3.0 接続検査 J
+    SPLIT_TIME_MIN_SEC: 120, SPLIT_TIME_FRAC: 0.05,   // 1.3.0 時間差 C
     NAME_DIV_NEAR_M: 150,   // E-name (c)（1.2.1、実機 2026-11-02 で 25 m では全件 POS_NEAR）：出口操作 step の始点が予定ランプの分流点から 150 m 以内、かつ予定の分流点が他のどの分流点よりも NAME_POS_M 以上近い（最寄りの分流点であること）
     NAME_HEAD_M: 50,        // E-name (c)（1.2.0）：出口操作 step の進行方位を求める区間の長さ（step の最初の 50 m）
     NAME_HEAD_DEG: 45,      // E-name (c)（1.2.0）：その進行方位と予定ランプの via_heading の差の許容
@@ -1235,7 +1235,7 @@
     return { verdict, reasons, legs: results, boundaries };
   }
 
-  // ================================================================ 1.3.0 分割評価（検証専用。計画 v2.5.1 §2.3。engine の判定は変えない）
+  // ================================================================ 1.3.0 分割評価（v2.5.1）
   let trunkCache = null;
   function trunkComps(gi) {
     if (trunkCache && trunkCache.gi === gi) return trunkCache.list;
@@ -1243,12 +1243,10 @@
     trunkCache = { gi, list };
     return list;
   }
-  /** 点 pt から本線・JCT 連絡路の形状までの最短距離（m） */
   function distToTrunk(gi, pt) {
     const proj = projector(pt.lat, pt.lng);
     return compDist([0, 0], projectComps(trunkComps(gi), proj), -1);
   }
-  /** 折れ線の先頭（fromEnd=false）または末尾（true）から m [m] の部分 */
   function polyPart(pts, m, fromEnd) {
     const a = fromEnd ? pts.slice().reverse() : pts;
     const out = [a[0]];
@@ -1304,7 +1302,7 @@
     if (!(haversineM(hwEnd, zeroPt) <= cfg.CONN_GAP_M) || !(haversineM(zeroPt, terminal) <= cfg.CONN_GAP_M)) return { ok: false, code: 'CONN_GAP' };
     return { ok: true, code: 'OK_ZERO' };
   }
-  /** 時間差の検査 C：分割合計 splitSec と全旅程 fullSec の差が max(SPLIT_TIME_MIN_SEC, fullSec×SPLIT_TIME_FRAC) 以内 */
+  /** 時間差 C */
   function splitTimeOk(splitSec, fullSec, cfg) {
     cfg = cfg || CONFIG;
     if (!isNum(splitSec) || !isNum(fullSec)) return null;
@@ -1319,7 +1317,6 @@
     if (!Array.isArray(secs) || secs.length !== 3 || secs.some(x => !x || x.error || !Array.isArray(x.sectionLegs) || x.sectionLegs.length !== 1)) { out.reasons.push('SPLIT_INCOMPLETE'); return out; }
     const L0 = secs[0].sectionLegs[0], L1 = secs[1].sectionLegs[0], L2 = secs[2].sectionLegs[0];
     const ride = cand.rides[0], on = gi.edges.get(ride.on), off = gi.edges.get(ride.off);
-    // 一般道区間（S0・S2）：端点の位置と料金（A）
     const s0 = matchSurface(gi, cand, 0, L0, cfg), s2 = matchSurface(gi, cand, 2, L2, cfg);
     const tollFail = [];
     if (s0.reason === 'SURF_TOLL' || secs[0].contaminated) tollFail.push('S0');
@@ -1327,19 +1324,17 @@
     out.A = { ok: tollFail.length === 0, code: tollFail.length ? 'SPLIT_SURF_TOLL:' + tollFail.join('+') : 'OK' };
     if (!out.A.ok) out.reasons.push('A:' + out.A.code);
     [['S0', s0], ['S2', s2]].forEach(([k, r]) => { if (r.verdict === '不一致') out.reasons.push(k + ':' + r.reason); else if (r.verdict === '判定不能' && r.reason !== 'SURF_TOLL') out.reasons.push(k + ':' + r.reason); });
-    // 時刻の引継ぎ（B）
     const d0 = secs[0].durationSec, d1 = secs[1].durationSec, d2 = secs[2].durationSec;
     const sp = i => secs[i].split || {};
     const bOk = isNum(dep0Ms) && isNum(d0) && isNum(d1) && sp(0).departureMs === dep0Ms && sp(1).departureMs === dep0Ms + Math.round(d0 * 1000) && sp(2).departureMs === dep0Ms + Math.round((d0 + d1) * 1000);
     out.B = { ok: !!bOk, code: bOk ? 'OK' : 'SPLIT_CARRY' };
     if (!bOk) out.reasons.push('B:SPLIT_CARRY');
-    // 高速区間（S1）の照合（D）：全旅程の高速 leg と同じ照合。E-name の「隣の一般道 leg」には S2 を渡す
+    // D：E-name の隣接 leg は S2
     let pts1 = null, d;
     try { pts1 = L1.polyline ? decodePolyline(L1.polyline) : null; } catch (e) { d = { verdict: '判定不能', reason: 'POLY_INVALID' }; }
     if (!d) d = matchRide(gi, ride, pts1, cfg, { legs: [L1, L2], h: 0 });
     out.D = { verdict: d.verdict, code: d.reason };
     if (d.verdict !== '一致') out.reasons.push('D:' + d.reason);
-    // 境目の接続（J1・J2）
     let p0 = null, p2 = null;
     try { p0 = L0.polyline ? decodePolyline(L0.polyline) : null; p2 = L2.polyline ? decodePolyline(L2.polyline) : null; } catch (e) { /* CONN_NOPOLY */ }
     // 1.3.1：ゼロ区間は (iv) の後に ①②（cond が無ければ特例なし）
@@ -1379,7 +1374,7 @@
       return {
         polyline: lg && lg.polyline && lg.polyline.encodedPolyline,
         durationSec: parseDuration(lg && lg.duration), distanceM: Number(lg && lg.distanceMeters) || null,
-        distanceZero: !!lg && (lg.distanceMeters === undefined || lg.distanceMeters === null || Number(lg.distanceMeters) === 0),   // 1.3.1：proto3 JSON では 0 は省略される
+        distanceZero: !!lg && (lg.distanceMeters === undefined || lg.distanceMeters === null || Number(lg.distanceMeters) === 0),   // 1.3.1：0 は省略される
         tollPresent: ti.present, tollStatus: ti.present ? ti.status : 'none', tollJpy: ti.status === 'priced' ? ti.jpy : null,
         tollSteps, jct, ic, steps: stepView,
       };
@@ -1423,6 +1418,7 @@
       out.timeDependency = timeDependencyOf(gi, cand, flags.timeDependency);
       const m = matchCandidate(gi, cand, legs, cfg, { diagAll: !!(q.inject && q.inject.diagAll) });
       out.match = m.verdict;
+      out.surfTollOnly = m.verdict === '判定不能' && m.reasons.length > 0 && m.reasons.every(x => /^L\d+:SURF_TOLL$/.test(x));   // 1.4.0：②′の対象条件
       meta.match = { verdict: m.verdict, reasons: m.reasons, legs: m.legs.map(l => ({ i: l.index, type: l.type, verdict: l.verdict, reason: l.reason, score: l.score, startD: l.startD, endD: l.endD, diag: l.diag || null })), boundaries: m.boundaries };
       meta.names = rideNames(gi, cand);
       if (flags.keepPolyline) meta.polylines = legs.map(l => l.polyline || null);
@@ -1431,7 +1427,7 @@
       out.sectionType = surface ? 'surface' : 'highway';
       out.contaminated = surface && (toll.state !== 'free' || legs.some(l => l.tollPresent || l.tollSteps > 0));
       out.match = null;
-      Object.defineProperty(out, 'sectionLegs', { value: legs, enumerable: false });   // 1.3.0：分割評価の検査（evalSplit）用。セッション内のみ（列挙されないので JSON・持ち出しに出ない）
+      Object.defineProperty(out, 'sectionLegs', { value: legs, enumerable: false });   // 1.3.0：evalSplit 用（非列挙）
       if (flags.keepPolyline) meta.polylines = legs.map(l => l.polyline || null);
     } else {
       out.match = null; out.timeDependency = 'なし';
@@ -1593,7 +1589,7 @@
     const now = opts.now || (() => Date.now());
     let mode = opts.mode || 'mock';
     const limiter = opts.limiter || createLimiter({ now });
-    const state = { search: null, expired: false, splitMemo: new Map(), log: [], counters: { sent: 0, simulated: 0, blockedExpired: 0, blockedLimit: 0, rejectedV1: 0, rejectedDegenerate: 0 } };
+    const state = { search: null, expired: false, splitMemo: new Map(), resplitMemo: new Map(), log: [], counters: { sent: 0, simulated: 0, blockedExpired: 0, blockedLimit: 0, rejectedV1: 0, rejectedDegenerate: 0 } };
     const flags = { keepPolyline: !!opts.keepPolyline, ignoreSurfaceTollInfo: false, timeDependency: opts.timeDependency };
 
     function replayKeys(q) {
@@ -1698,7 +1694,17 @@
       let res;
       try { res = interpret(gi, q, req, raw.json, cfg, flags); } catch (e) { return done({ error: 'BAD_RESPONSE', message: '応答の解釈に失敗：' + String((e && e.message) || e), meta: meta0 }); }
       res.meta = Object.assign(res.meta, meta0);
-      if (q.kind === 'split') res.split = { section: q.section, carrySec: carry, departureMs: req.departureMs };   // 1.3.0：時刻引継ぎの検査 B 用（自社の要求値）
+      if (q.kind === 'split') res.split = { section: q.section, carrySec: carry, departureMs: req.departureMs };   // 1.3.0：検査 B 用
+      if (q.kind === 'split' && q.purpose === 'resplit') {         // 1.4.0：3 区間で evalSplit
+        const rk = q.searchId + '|' + q.generation + '|' + q.candidateId;
+        const ms = state.resplitMemo.get(rk) || [];
+        if (q.section === 0) ms.length = 0;
+        ms[q.section] = res; state.resplitMemo.set(rk, ms);
+        if (q.section === 2 && q.candidate) {
+          const ev = evalSplit(gi, q.candidate, [ms[0], ms[1], ms[2]], Date.parse(q.cond.departureTime), cfg, q.cond);
+          res.splitEval = { verdict: ev.verdict, reasons: ev.reasons.slice(), A: !!(ev.A && ev.A.ok), B: !!(ev.B && ev.B.ok), D: ev.D ? ev.D.verdict : null, J1: ev.J1 ? ev.J1.code : null, J2: ev.J2 ? ev.J2.code : null };
+        }
+      }
       if (q.kind === 'split' && typeof res.durationSec === 'number') {
         const mk = q.searchId + '|' + q.generation + '|' + q.candidateId;
         const memo = state.splitMemo.get(mk) || [];
@@ -1768,14 +1774,14 @@
       candidates: cands,
       store: search.store.map(r => ({
         seq: r.seq, searchId: r.searchId, generation: r.generation, condKey: r.condKey, kind: r.kind, candidateId: r.candidateId, attempt: r.attempt, slot: r.slot,
-        section: r.section, sections: r.sections, retry: r.retry, fetchedAt: r.fetchedAt, method: r.method, ok: r.ok, failReason: r.failReason,
+        section: r.section, sections: r.sections, retry: r.retry, fetchedAt: r.fetchedAt, method: r.method, ok: r.ok, failReason: r.failReason, purpose: r.purpose || null,
         response: clone(r.response),
       })),
       rank: {
         status: rep.status, baseOk: rep.baseOk, baseReason: rep.baseReason, baseMin: rep.baseMin, enumerated: rep.enumerated, enumComplete: rep.enumComplete,
         attempted: rep.attempted, evaluated: rep.evaluated, unevaluated: rep.unevaluated, comparable: rep.comparable, unverified: rep.unverified,
-        main: (rep.main || []).map(x => ({ id: x.id, C: x.C, Tmin: x.Tmin, savingMin: x.savingMin, yenPerMin: x.yenPerMin, td: x.td, generation: x.generation, recSeq: x.recSeq })),
-        beyondTop: (rep.beyondTop || []).map(x => ({ id: x.id, C: x.C, Tmin: x.Tmin, savingMin: x.savingMin, yenPerMin: x.yenPerMin, td: x.td, generation: x.generation, recSeq: x.recSeq })),
+        main: (rep.main || []).map(x => ({ id: x.id, C: x.C, Tmin: x.Tmin, savingMin: x.savingMin, yenPerMin: x.yenPerMin, td: x.td, generation: x.generation, recSeq: x.recSeq, split1: !!x.split1 })),
+        beyondTop: (rep.beyondTop || []).map(x => ({ id: x.id, C: x.C, Tmin: x.Tmin, savingMin: x.savingMin, yenPerMin: x.yenPerMin, td: x.td, generation: x.generation, recSeq: x.recSeq, split1: !!x.split1 })),
         others: (rep.others || []).map(x => ({ id: x.id, reasons: x.reasons.slice(), durationSec: x.durationSec || null, comparable: !!x.comparable })),
         pending: (rep.pending || []).map(x => ({ id: x.id, reason: x.reason })),
         direct: rep.direct ? { population: rep.direct.population, reps: rep.direct.reps.slice() } : null,
@@ -1910,8 +1916,8 @@
         http: m.http === undefined ? null : m.http, sent: m.sent === undefined ? null : m.sent, mode: m.mode || r.method || null, ms: m.ms === undefined ? null : m.ms, deadlineOk: m.deadline ? !!m.deadline.ok : null,
         tollState: resp.toll ? resp.toll.state : null, fullTripFare: resp.fullTripFare === undefined ? null : !!resp.fullTripFare, fareCodes,
         condition: resp.condition || null, fallback: !!(m.fallback || resp.fallback), timeDependency: resp.timeDependency || null,
-        match: resp.match === undefined ? null : resp.match,
-        matchReasons: mm ? mm.reasons.slice() : [],
+        match: resp.splitEval ? 'split:' + resp.splitEval.verdict : (resp.match === undefined ? null : resp.match), purpose: r.purpose || null,
+        matchReasons: resp.splitEval ? resp.splitEval.reasons.slice() : (mm ? mm.reasons.slice() : []),
         boundaries: mm && mm.boundaries ? mm.boundaries.map(b => ({ ride: b.ride, id: b.id, side: b.side, risk: !!b.risk, status: b.status, via: b.via, pattern: b.pattern, name: b.name && b.name.conds ? b.name.conds : null, diag: b.diag ? clone(b.diag) : null })) : [],
         legDiag: mm ? mm.legs.filter(l => l.verdict !== '一致' && l.diag).map(l => Object.assign({ leg: l.i, type: l.type }, clone(l.diag))) : [],
         group: mm ? mm.legs.filter(l => l.score && l.score.group).map(l => ({ leg: l.i, in: l.score.group.in, out: l.score.group.out })) : [],
@@ -1927,7 +1933,7 @@
     });
     const mainRow = (x, i) => {
       const r = lastFull.get(x.id), resp = r && r.response || {};
-      return { pos: i + 1, id: x.id, label: labelOf(x.id), match: resp.match || null, tollState: resp.toll ? resp.toll.state : null, condition: resp.condition || null, timeDependency: resp.timeDependency || null };
+      return { pos: i + 1, id: x.id, label: labelOf(x.id), match: resp.match || null, tollState: resp.toll ? resp.toll.state : null, condition: resp.condition || null, timeDependency: resp.timeDependency || null, split1: !!x.split1 };
     };
     const matchReasonsOf = id => { const r = lastFull.get(id); return r && r.ok && r.response.meta && r.response.meta.match ? r.response.meta.match.reasons : []; };
     const pendingBy = {};
@@ -1951,7 +1957,7 @@
   const yn = b => (b ? '1' : '0');
   /** 持ち出し用の呼出ログ 1 行（17 項目）。Google 由来の数値（所要秒・料金・距離・採点）は含めない */
   function callLogLine(c) {
-    const slot = c.kind === 'split' ? ('s' + c.section + '/' + c.sections) : (c.slot || '-');
+    const slot = c.kind === 'split' ? ((c.purpose === 'resplit' ? 'resplit:' : '') + 's' + c.section + '/' + c.sections) : (c.slot || '-');
     const mt = c.match ? c.match + (c.matchReasons.length ? '[' + c.matchReasons.join(',') + ']' : '') : '-';
     const bd0 = c.boundaries.length ? c.boundaries.map(b => b.side + ':' + (b.risk ? 'R' : 'N') + ':' + b.status + (b.pattern ? '(' + b.pattern + ')' : '') + diagCode(b.diag)).join('/') : '';
     const ld = (c.legDiag || []).map(legDiagCode).join(' ');                       // 1.1.1：非一致 leg の内訳（SURF_TOLL・失敗検査）
@@ -1987,7 +1993,7 @@
     L.push(' 状態: ' + r.status + (r.baseOk ? '' : '（基準経路不成立：' + (r.baseReason || '未取得') + '）') + ' 列挙済み' + r.enumerated + ' 評価試行' + r.attempted + ' 評価済み' + r.evaluated + ' 比較可能' + r.comparable + ' 未検証' + r.unverified + ' 未評価' + r.unevaluated);
     L.push(' 主ランキング(順位と候補のみ。円/分・料金・所要時間・短縮分は含めない):');
     if (!r.main.length) L.push('  なし');
-    r.main.forEach(x => L.push('  ' + x.pos + '. ' + x.id + ' ' + x.label + ' [照合:' + x.match + ' 料金:' + x.tollState + ' 条件:' + x.condition + (x.timeDependency && x.timeDependency !== 'なし' ? ' 時刻:' + x.timeDependency : '') + ']'));
+    r.main.forEach(x => L.push('  ' + x.pos + '. ' + x.id + ' ' + x.label + (x.split1 ? ' [分割評価で確認（区間料金）：全旅程の照合 ' + x.match + ' → 分割再評価の検査 合格]' : ' [照合:' + x.match + ' 料金:' + x.tollState + ' 条件:' + x.condition + (x.timeDependency && x.timeDependency !== 'なし' ? ' 時刻:' + x.timeDependency : '') + ']')));
     if (r.beyondTopIds.length) L.push(' 圏外(比較可能で順位6位以下): ' + r.beyondTopIds.length + '件');
     if (r.others.length) {
       L.push(' 別枠(主ランキング外):');

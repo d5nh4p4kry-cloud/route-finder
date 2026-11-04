@@ -10,7 +10,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 'v7-stage4-1.1.0';
+  const VERSION = 'v7-stage5-1.2.0';
   const SCHEMA = 'rf-graph/1';
   const NODE_TYPES = ['mainline', 'ramp_mainline_end', 'ramp_surface_end', 'jct', 'sapa', 'smartic_gate'];
   const SURFACE_TYPES = ['ramp_surface_end', 'smartic_gate'];
@@ -38,6 +38,7 @@
     lambdaSameIcSec: 600,   // C2：同一IC・同方向／同一一般道側ノードへの即時乗り直しの追加補正λ_same（同上）
     seedIcCount: 3,         // C3：種まきの最寄りIC数（0＝種まきなし）
     directSlots: 2,         // C7：直行評価枠の最大件数（共通予算Bの内数。0＝枠なし）
+    splitReserve: 0,        // 1.2.0 混合方式（計画 v2.6.2）：②′分割再評価の予約回数（3 の倍数に切下げ。0＝混合方式なし＝1.1.0 と同じ動作）
     exposeGenerators: false,// 試験用：未消化の生成器を結果に含める（メモリ構造の検査用）
   });
 
@@ -562,8 +563,10 @@
     const now = ctx.now || (() => Date.now());
     const profile = ctx.profile || o.profile;
     const free = () => bud.B - bud.used - bud.reserved;
+    let hold = 0;                                   // 1.2.0：②′分割再評価のために②で使わずに取っておく回数
+    const avail = () => free() - hold;
     const tryReserve = () => {
-      if (bud.retriesUsed + bud.reserved < o.maxRetries && free() >= 1) { bud.reserved++; return true; }
+      if (bud.retriesUsed + bud.reserved < o.maxRetries && avail() >= 1) { bud.reserved++; return true; }
       return false;
     };
     if (ctx.priorityIds && ctx.priorityIds.length) s.gens[gen].prioritized = true;
@@ -587,7 +590,7 @@
         seq: s.store.length, searchId: s.searchId, generation: gen, condKey: ck,
         kind: req.kind, candidateId: req.candidateId || null, attempt: req.attempt || null, slot: req.slot || null,
         section: req.section === undefined ? null : req.section, sections: req.sections === undefined ? null : req.sections,
-        retry: !!isRetry, fetchedAt: now(), method: ctx.method || 'mock',
+        retry: !!isRetry, fetchedAt: now(), method: ctx.method || 'mock', purpose: req.purpose || null,
         ok: !res.error, failReason: res.error || null, response: res,
       };
       s.store.push(rec);
@@ -644,20 +647,44 @@
         if (!over) await callRetryNow(fullReq(c));
       }
     } else {
-      // ② 全旅程評価・有効候補を増やす追加評価
+      // ② 全旅程評価・有効候補を増やす追加評価（1.2.0：②′の予約 hold を除いた範囲で）
       const retryQ = [], splitQ = [];
-      for (const c of order) {
-        if (s.stopped || free() < 1) break;
-        if (c.intermediates > o.maxIntermediates) { splitQ.push(c); continue; } // 25点超過は分割扱い
-        const rec = await call(fullReq(c), false);
-        if (!rec) break;
-        if (isRetryable(rec) && tryReserve()) retryQ.push(c);                 // 回復対象の発生時点で枠確保
-      }
+      hold = Math.floor(Math.max(0, Math.min(o.splitReserve || 0, free())) / 3) * 3;
+      let idx = 0;
+      const runSecond = async () => {
+        for (; idx < order.length; idx++) {
+          const c = order[idx];
+          if (s.stopped || avail() < 1) break;
+          if (c.intermediates > o.maxIntermediates) { splitQ.push(c); continue; } // 25点超過は分割扱い
+          const rec = await call(fullReq(c), false);
+          if (!rec) break;
+          if (isRetryable(rec) && tryReserve()) retryQ.push(c);                 // 回復対象の発生時点で枠確保
+        }
+      };
       // ③ 回復見込みのある一時障害への限定的再試行
-      while (retryQ.length && !s.stopped) {
-        const c = retryQ.shift();
-        const rec = await call(fullReq(c), true);
-        if (rec && isRetryable(rec) && tryReserve()) retryQ.push(c);
+      const runRetries = async () => {
+        while (retryQ.length && !s.stopped) {
+          const c = retryQ.shift();
+          const rec = await call(fullReq(c), true);
+          if (rec && isRetryable(rec) && tryReserve()) retryQ.push(c);
+        }
+      };
+      await runSecond(); await runRetries();
+      // ②′ 分割再評価（混合方式）：対象が予約に満たなければ余りを②に返し、その後で対象を分割評価する
+      if (hold > 0 && !s.stopped) {
+        let tg = resplitTargets(s, baseMin);
+        const back = hold - 3 * Math.min(tg.length, hold / 3);
+        if (back > 0) { hold -= back; await runSecond(); await runRetries(); tg = resplitTargets(s, baseMin); }
+        const k = Math.min(tg.length, hold / 3);
+        hold = 0;
+        for (const c of tg.slice(0, k)) {
+          if (s.stopped || free() < 3) break;
+          for (let i = 0; i < 3; i++) {
+            const rec = await callRetryNow({ kind: 'split', purpose: 'resplit', candidateId: c.id, section: i, sections: 3, sectionType: i % 2 === 0 ? 'surface' : 'highway', candidate: c });
+            if (!rec || !rec.ok) break;
+          }
+        }
+        if (free() > 0 && !s.stopped) { await runSecond(); await runRetries(); }     // ②′で使い残した分は②に戻す
       }
       // ④ 残予算での診断用分割（2n+1区間）
       for (const c of splitQ) { if (s.stopped) break; await runSplit(c); }
@@ -668,6 +695,52 @@
       bud.reserved = 0; // 停止時に未使用の確保枠を解放
       return rank(s);
     }
+  }
+
+  // ---------------------------------------------------------------- 1.2.0 混合方式（計画 v2.6.2）
+  /** 首都高（事業者名に「首都高」）の辺を含む乗車か */
+  function rideHasShutoko(s, ride) {
+    if (!s._edgeMap) s._edgeMap = new Map(s.graph.edges.map(e => [e.id, e]));
+    return ride.path.some(id => { const e = s._edgeMap.get(id); return !!e && /首都高/.test(e.operator || ''); });
+  }
+  /** ②′の対象の基本条件（全旅程評価の記録 rec と候補 c）：判定不能・理由が SURF_TOLL だけ・乗車 1 回・25 点以下・首都高なし */
+  function resplitEligible(s, rec, c) {
+    return !!rec && rec.ok && rec.kind === 'full' && rec.response && rec.response.match === '判定不能' && rec.response.surfTollOnly === true &&
+      c.n === 1 && c.intermediates <= s.options.maxIntermediates && !rideHasShutoko(s, c.rides[0]);
+  }
+  /** ②′の対象：推定短縮（=基準−推定所要）の大きい順、同じ入口 IC・出口 IC の対は 1 件、同点は推定円/分→ID。既に分割再評価した候補は除く */
+  function resplitTargets(s, baseMin) {
+    const st = classify(s);
+    if (!s._edgeMap) s._edgeMap = new Map(s.graph.edges.map(e => [e.id, e]));
+    const tried = new Set(s.store.filter(r => r.generation === s.generation && r.purpose === 'resplit').map(r => r.candidateId));
+    const list = [];
+    for (const e of st.byId.values()) {
+      if (!e.evaluated || !e.rec || e.rec.kind !== 'full' || tried.has(e.c.id) || !resplitEligible(s, e.rec, e.c)) continue;
+      list.push(e.c);
+    }
+    list.sort((a, b) => cmpNum(a.estSec, b.estSec) || cmpNum(estRatio(a, baseMin), estRatio(b, baseMin)) || cmpStr(a.id, b.id));
+    const seen = new Set(), out = [];
+    for (const c of list) {
+      const r = c.rides[0], k = (s._edgeMap.get(r.on) || {}).ic_id + '>' + (s._edgeMap.get(r.off) || {}).ic_id;
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(c);
+    }
+    return out;
+  }
+  /** split1 の判定（計画 v2.6.1 §C）：同じ候補・同じ世代の分割再評価 3 区間がそろい、各区間が正常、検査 A・B・D・J1・J2 合格（splitEval.verdict＝一致）。元の全旅程応答の正常性は流用しない */
+  function split1Of(s, fr, sp, c) {
+    if (!resplitEligible(s, fr, c) || !sp || sp.size !== 3) return null;
+    const rs = [0, 1, 2].map(i => sp.get(i));
+    const durOk = (r, i) => (i === 1 ? validDur(r.response) : isFiniteNum(r.response.durationSec) && r.response.durationSec >= 0);   // 一般道区間は確認できたゼロ区間（0 秒）を許す
+    if (rs.some((r, i) => !r || r.purpose !== 'resplit' || !r.ok || !r.response || !durOk(r, i) || r.response.condition !== '要求充足' || r.response.fallback)) return { ok: false, why: '区間の応答不備' };
+    const t = rs.map(r => r.response.toll && r.response.toll.state);
+    if (t[0] !== 'free' || t[2] !== 'free') return { ok: false, why: '一般道区間に料金' };
+    let C = null;
+    if (t[1] === 'free') C = 0; else if (t[1] === 'priced' && isFiniteNum(rs[1].response.toll.jpy) && rs[1].response.toll.jpy >= 0) C = rs[1].response.toll.jpy;
+    if (C === null) return { ok: false, why: '高速区間の料金不明' };
+    const ev = rs[2].response.splitEval;
+    if (!ev || ev.verdict !== '一致') return { ok: false, why: '分割評価の検査不合格' };
+    return { ok: true, C, durationSec: rs.reduce((a, r) => a + r.response.durationSec, 0), rec: rs[2] };
   }
 
   // ---------------------------------------------------------------- 分類（ストアから現世代・同一比較条件だけを使う）
@@ -710,6 +783,11 @@
       if (fr && !isRetryable(fr)) {
         e.evaluated = true; e.kind = 'full'; e.rec = fr;
         Object.assign(e, entryCheck(fr, c));
+        const s1 = sp && Array.from(sp.values()).some(r => r.purpose === 'resplit') ? split1Of(s, fr, sp, c) : null;   // 1.2.0 混合方式
+        if (s1 && s1.ok) {
+          e.kind = 'split1'; e.split1 = true; e.rec = s1.rec; e.C = s1.C; e.durationSec = s1.durationSec; e.td = tdLabel(fr.response.timeDependency);
+          e.reasons = c.restrictionUnresolved ? ['通行条件未確認（同梱データに未解決の通行条件）'] : [];
+        } else if (s1) e.reasons = e.reasons.concat(['分割再評価で確認できず（' + s1.why + '）']);
       } else if (splitOk) {
         e.evaluated = true; e.kind = 'split'; e.durationSec = splitSec;
         e.reasons = ['全旅程料金未検証（分割評価・診断用：中間地点' + c.intermediates + '点＞' + o.maxIntermediates + '）'];
@@ -755,7 +833,7 @@
       const Tc = e.durationSec / 60;
       const d = Tb - Tc;
       if (!(d > 0)) { rep.others.push({ id: e.c.id, reasons: ['短縮なし（分母≤0のため円/分の対象外）'], durationSec: e.durationSec, comparable: true }); continue; }
-      ranked.push({ id: e.c.id, C: e.C, Tmin: Tc, savingMin: d, yenPerMin: e.C / d, td: e.td, generation: e.rec.generation, recSeq: e.rec.seq });
+      ranked.push({ id: e.c.id, C: e.C, Tmin: Tc, savingMin: d, yenPerMin: e.C / d, td: e.td, generation: e.rec.generation, recSeq: e.rec.seq, split1: !!e.split1 });
     }
     ranked.sort((a, b) => cmpNum(a.yenPerMin, b.yenPerMin) || cmpNum(b.savingMin, a.savingMin) || cmpStr(a.id, b.id));
     rep.main = ranked.slice(0, o.topN);
@@ -809,7 +887,7 @@
     }
     L.push('同一条件で比較可能な' + rep.comparable + '経路中の暫定上位' + rep.main.length + '件（評価試行' + rep.attempted + '件、比較可能' + rep.comparable + '件、未検証' + rep.unverified + '件）');
     rep.main.forEach((r, i) => {
-      L.push((i + 1) + '. ' + candidateLabel(s, r.id) + '　' + fmtRatio(r.yenPerMin) + '円/分（¥' + r.C + '・' + (Math.round(r.Tmin * 10) / 10) + '分・短縮' + (Math.round(r.savingMin * 10) / 10) + '分）' + (r.td ? '［' + r.td + '］' : ''));
+      L.push((i + 1) + '. ' + candidateLabel(s, r.id) + '　' + fmtRatio(r.yenPerMin) + '円/分（¥' + r.C + '・' + (Math.round(r.Tmin * 10) / 10) + '分・短縮' + (Math.round(r.savingMin * 10) / 10) + '分）' + (r.td ? '［' + r.td + '］' : '') + (r.split1 ? '［分割評価で確認（区間料金）］' : ''));
     });
     if (rep.main.length < s.options.topN) {
       const why = ['比較可能で短縮のある候補が' + rep.main.length + '件のみ'];
@@ -828,6 +906,7 @@
     VERSION, SCHEMA, DEFAULTS, NODE_TYPES, SURFACE_TYPES, EDGE_KINDS, RETRYABLE, FATAL,
     haversineM, canonicalId, validateGraph, enumerate, createSearch, updateDepartureTime,
     evaluate, rank, classify, condKey, orderCandidates, directRepresentatives, directPopulation, candidateLabel, baseAcceptance,
+    resplitTargets, resplitEligible, split1Of, rideHasShutoko,
   };
   root.RFEngine = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
