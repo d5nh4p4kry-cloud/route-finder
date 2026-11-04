@@ -11,10 +11,16 @@
  */
 (function (root) {
   'use strict';
-  var VERSION = 'rf7-verify-rank-1.1.0';
+  var VERSION = 'rf7-verify-rank-1.2.0';
 
   function isNum(x) { return typeof x === 'number' && isFinite(x); }
   function cmpStr(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+  // 1.2.0：大圏距離（engine とは別に書く。地球半径は平均半径 6371008.8 m）
+  function gcM(a, b) {
+    var k = Math.PI / 180, x = Math.sin((b.lat - a.lat) * k / 2), y = Math.sin((b.lng - a.lng) * k / 2);
+    var h = x * x + Math.cos(a.lat * k) * Math.cos(b.lat * k) * y * y;
+    return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
 
   // グラフ（app 版）から ランプ辺ID → {ic, dir} の対応表を作る（R1 判定用）
   function rampIndex(graph) {
@@ -67,8 +73,19 @@
     // 1.1.0 混合方式（計画 v2.6.2 §C）：分割再評価（purpose=resplit）の 3 区間を候補・区間ごとに最後の記録で集める（engine とは別に書く）
     var rsp = {};
     recs.forEach(function (r) { if (r.kind === 'split' && r.purpose === 'resplit' && r.candidateId != null) { (rsp[r.candidateId] = rsp[r.candidateId] || {})[r.section] = r; } });
-    var opsOf = null;
-    if (opts.graph) { opsOf = {}; opts.graph.edges.forEach(function (e) { opsOf[e.id] = e.operator || ''; }); }
+    var opsOf = null, edgeOf = {}, nodeOf = {};
+    if (opts.graph) { opsOf = {}; opts.graph.edges.forEach(function (e) { opsOf[e.id] = e.operator || ''; edgeOf[e.id] = e; }); opts.graph.nodes.forEach(function (n) { nodeOf[n.id] = n; }); }
+    // 1.2.0（計画 v2.7.2）：②′の対象条件「高速の割合 ≥ lowShareBack」。割合＝乗車の辺長の合計 ÷（辺長＋出発地〜入口ランプ始点＋出口ランプ終点〜目的地の大圏距離）
+    var lsb = (search.options && isNum(search.options.lowShareBack)) ? search.options.lowShareBack : 0;
+    function shareOf(rd) {
+      if (!rd.path || !rd.path.length || !search.cond) return null;
+      var hw = 0;
+      for (var i = 0; i < rd.path.length; i++) { var e = edgeOf[rd.path[i]]; if (!e || !isNum(e.length_m)) return null; hw += e.length_m; }
+      var a = nodeOf[(edgeOf[rd.on] || {}).from], z = nodeOf[(edgeOf[rd.off] || {}).to];
+      if (!a || !z) return null;
+      var t = hw + gcM(search.cond.origin, a) + gcM(z, search.cond.destination);
+      return t > 0 ? hw / t : 1;
+    }
     var maxPts = (search.options && search.options.maxIntermediates) || 25;
     function split1(id, r, c) {
       var x = r.response || {};
@@ -78,6 +95,7 @@
       if (!opsOf) return { bad: 'SPLIT1_NOGRAPH' };
       var rd = c.rides[0];
       if (/首都高/.test(opsOf[rd.on] || '') || /首都高/.test(opsOf[rd.off] || '') || (rd.fare || []).some(function (f) { return /首都高/.test(opsOf[f] || ''); })) return { bad: 'SPLIT1_SHUTOKO' };
+      if (lsb > 0) { var sh = shareOf(rd); if (sh === null) return { bad: 'SPLIT1_NOSHARE' }; if (sh < lsb) return { bad: 'SPLIT1_LOWSHARE' }; }
       var a = sec[0], b = sec[1], z = sec[2];
       if (!a || !b || !z) return { bad: 'SPLIT1_INCOMPLETE' };
       var parts = [a, b, z];

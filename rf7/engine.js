@@ -10,7 +10,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 'v7-stage5-1.2.0';
+  const VERSION = 'v7-stage5-1.3.0';
   const SCHEMA = 'rf-graph/1';
   const NODE_TYPES = ['mainline', 'ramp_mainline_end', 'ramp_surface_end', 'jct', 'sapa', 'smartic_gate'];
   const SURFACE_TYPES = ['ramp_surface_end', 'smartic_gate'];
@@ -39,6 +39,8 @@
     seedIcCount: 3,         // C3：種まきの最寄りIC数（0＝種まきなし）
     directSlots: 2,         // C7：直行評価枠の最大件数（共通予算Bの内数。0＝枠なし）
     splitReserve: 0,        // 1.2.0 混合方式（計画 v2.6.2）：②′分割再評価の予約回数（3 の倍数に切下げ。0＝混合方式なし＝1.1.0 と同じ動作）
+    lowShareBack: 0,        // 1.3.0（計画 v2.7.2）：高速の割合（highwayM÷(highwayM+surfaceM)）がこの値未満の候補を②の評価順の後ろに回す（削除しない）。②′の対象からも外す。0＝無効（1.2.0 と同じ）
+    resplitOrder: 'saving', // 1.3.0：②′の並べ方。'saving'＝推定短縮の大きい順（1.2.0）｜'exitNear'＝出口の一般道側端点から目的地までの大圏距離の短い順→推定短縮の大きい順
     exposeGenerators: false,// 試験用：未消化の生成器を結果に含める（メモリ構造の検査用）
   });
 
@@ -520,12 +522,19 @@
     const d = baseMin - c.estSec / 60;
     return d > 0 ? c.estTollJpy / d : Infinity;
   }
+  /** 1.3.0 高速の割合（自社グラフの辺長と大圏距離。順序と対象選択だけに使う。候補選択の仮説：計画 v2.7.1 §C） */
+  function hwShare(c) {
+    const t = (c.highwayM || 0) + (c.surfaceM || 0);
+    return t > 0 ? (c.highwayM || 0) / t : 1;
+  }
+  function isLowShare(c, o) { return !!o && o.lowShareBack > 0 && hwShare(c) < o.lowShareBack; }
   /**
    * API 評価順（C5）。キーの優先順：(1) priorityIds、(2) 直行代表 directIds、(3) 多様性鍵〈(最初の入口IC,方向),(最後の出口IC,方向)〉内の順位、
    * (4) 推定円/分（pen なし）、(5) 優先度補正 pen の小さい順、(6) estSec、(7) ID。
    * 多様性鍵内の順位は (4)→(5)→(6)→(7) の順で付ける。
+   * 1.3.0：o.lowShareBack > 0 なら、(1) の次に「高速の割合が閾値未満か」を置く（未満を後ろへ。その中の順序は従来どおり）。
    */
-  function orderCandidates(cands, baseMin, priorityIds, directIds) {
+  function orderCandidates(cands, baseMin, priorityIds, directIds, o) {
     const pri = new Map((priorityIds || []).map((id, i) => [id, i]));
     const dset = new Set(directIds || []);
     const items = cands.map(c => ({ c, r: estRatio(c, baseMin), pen: c.pen || 0, key: c.divKey || (c.firstOn + '>' + c.lastOff), div: 0 }));
@@ -535,7 +544,8 @@
     for (const it of items) { const k = seen.get(it.key) || 0; it.div = k; seen.set(it.key, k + 1); }
     const P = id => pri.has(id) ? pri.get(id) : 1e15;
     const D = id => dset.has(id) ? 0 : 1;
-    items.sort((a, b) => cmpNum(P(a.c.id), P(b.c.id)) || cmpNum(D(a.c.id), D(b.c.id)) || cmpNum(a.div, b.div) || base(a, b));
+    const Lo = c => isLowShare(c, o) ? 1 : 0;
+    items.sort((a, b) => cmpNum(P(a.c.id), P(b.c.id)) || cmpNum(Lo(a.c), Lo(b.c)) || cmpNum(D(a.c.id), D(b.c.id)) || cmpNum(a.div, b.div) || base(a, b));
     return items.map(it => it.c);
   }
 
@@ -634,7 +644,7 @@
     // ①′ 直行評価枠（C7）：基準経路の直後に直行代表（最大 directSlots 件）を評価する。Bの内数で、評価済みの代表は再評価しない
     const reps = directRepresentatives(s.enumeration.candidates, baseMin, o).filter(c => !st.byId.get(c.id).evaluated);
     reps.forEach(c => directIds.add(c.id));
-    const rest = orderCandidates(pending.filter(c => !directIds.has(c.id)), baseMin, ctx.priorityIds);
+    const rest = orderCandidates(pending.filter(c => !directIds.has(c.id)), baseMin, ctx.priorityIds, null, o);
     const order = reps.concat(rest);
 
     if (profile === 'verification') {
@@ -703,10 +713,17 @@
     if (!s._edgeMap) s._edgeMap = new Map(s.graph.edges.map(e => [e.id, e]));
     return ride.path.some(id => { const e = s._edgeMap.get(id); return !!e && /首都高/.test(e.operator || ''); });
   }
-  /** ②′の対象の基本条件（全旅程評価の記録 rec と候補 c）：判定不能・理由が SURF_TOLL だけ・乗車 1 回・25 点以下・首都高なし */
+  /** ②′の対象の基本条件（全旅程評価の記録 rec と候補 c）：判定不能・理由が SURF_TOLL だけ・乗車 1 回・25 点以下・首都高なし・（1.3.0）高速の割合 ≥ lowShareBack */
   function resplitEligible(s, rec, c) {
     return !!rec && rec.ok && rec.kind === 'full' && rec.response && rec.response.match === '判定不能' && rec.response.surfTollOnly === true &&
-      c.n === 1 && c.intermediates <= s.options.maxIntermediates && !rideHasShutoko(s, c.rides[0]);
+      c.n === 1 && c.intermediates <= s.options.maxIntermediates && !rideHasShutoko(s, c.rides[0]) && !isLowShare(c, s.options);
+  }
+  /** 1.3.0 出口の一般道側端点（off_ramp の to）から目的地までの大圏距離 */
+  function exitDistM(s, c) {
+    if (!s._nodeMap) s._nodeMap = new Map(s.graph.nodes.map(n => [n.id, n]));
+    if (!s._edgeMap) s._edgeMap = new Map(s.graph.edges.map(e => [e.id, e]));
+    const e = s._edgeMap.get(c.rides[c.rides.length - 1].off), n = e && s._nodeMap.get(e.to);
+    return n ? haversineM(n, s.cond.destination) : Infinity;
   }
   /** ②′の対象：推定短縮（=基準−推定所要）の大きい順、同じ入口 IC・出口 IC の対は 1 件、同点は推定円/分→ID。既に分割再評価した候補は除く */
   function resplitTargets(s, baseMin) {
@@ -718,7 +735,9 @@
       if (!e.evaluated || !e.rec || e.rec.kind !== 'full' || tried.has(e.c.id) || !resplitEligible(s, e.rec, e.c)) continue;
       list.push(e.c);
     }
-    list.sort((a, b) => cmpNum(a.estSec, b.estSec) || cmpNum(estRatio(a, baseMin), estRatio(b, baseMin)) || cmpStr(a.id, b.id));
+    const sav = (a, b) => cmpNum(a.estSec, b.estSec) || cmpNum(estRatio(a, baseMin), estRatio(b, baseMin)) || cmpStr(a.id, b.id);
+    if (s.options.resplitOrder === 'exitNear') { const dm = new Map(list.map(c => [c.id, exitDistM(s, c)])); list.sort((a, b) => cmpNum(dm.get(a.id), dm.get(b.id)) || sav(a, b)); }
+    else list.sort(sav);
     const seen = new Set(), out = [];
     for (const c of list) {
       const r = c.rides[0], k = (s._edgeMap.get(r.on) || {}).ic_id + '>' + (s._edgeMap.get(r.off) || {}).ic_id;
@@ -906,7 +925,7 @@
     VERSION, SCHEMA, DEFAULTS, NODE_TYPES, SURFACE_TYPES, EDGE_KINDS, RETRYABLE, FATAL,
     haversineM, canonicalId, validateGraph, enumerate, createSearch, updateDepartureTime,
     evaluate, rank, classify, condKey, orderCandidates, directRepresentatives, directPopulation, candidateLabel, baseAcceptance,
-    resplitTargets, resplitEligible, split1Of, rideHasShutoko,
+    resplitTargets, resplitEligible, split1Of, rideHasShutoko, hwShare, isLowShare, exitDistM,
   };
   root.RFEngine = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

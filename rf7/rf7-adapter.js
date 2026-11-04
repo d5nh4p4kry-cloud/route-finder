@@ -1,17 +1,17 @@
 /*
  * RF7Adapter — ルートファインダー v7 段階5a 検証器（adapter）
  * 仕様（優先順位 v2.3 ＞ v2.2 ＞ v2.1 ＞ v2）：route-finder-stage5a-plan-v2.3.md §1〜§3、-v2.2.md、-v2.1.md、-v2.md §5.2 V1〜V5、HANDOVER.md（段階2の実機事実）
- * 1.1.0：V2 を「要求遵守の検査」に再定義（v2.1）／境界ごとの識別根拠 E-geo・E-name と BOUNDARY_UNRESOLVED（v2.2・v2.3）／GEOM_GAP／R1 の拒否／
+ * 1.1.0：V2 を要求遵守の検査に再定義（v2.1）／E-geo・E-name と BOUNDARY_UNRESOLVED（v2.2・v2.3）／GEOM_GAP／R1 の拒否／
  *        vehicleStopover 要求生成（検証専用）／料金・所要時間・条件の独立保持（v2.2 §5.3）／持ち出し用書き出し rf7-5a/3（v2.3 §3）
  * - DOM 非依存・外部依存なし・ES2020。ブラウザでは self.RF7Adapter、Node では module.exports
- * - engine.js（v7-stage4-1.1.0、無改変）の evaluate(search,{api}) に渡す api(q) を createAdapter() が作る
+ * - engine.js の evaluate(search,{api}) に渡す api(q) を createAdapter() が作る（1.4.1：export に評価順の設定と path）
  * - 通信は注入（live の fetch と getKey は呼び出し側が渡す）。キーは保存せず、ログ・記録・エラー文に出さない
  * - Google の応答（実応答）は保存しない。polyline は照合の入力としてのみ使い、既定では記録に残さない（§5.9）
- * - 推測で埋めた点は README-adapter.md の「仮定」に列挙（閾値の許容割合など）
+ * - 推測で埋めた点は README-adapter.md の「仮定」に列挙
  *
  * 1.1.1：診断の追加のみ（判定規則・閾値・合否は 1.1.0 と同一）。リスク境界ごとの diag（案内文・step の構造に対する検査の真偽フラグ、maneuver の列挙名、step 添字・件数）、
  *        SURF_TOLL の内訳（leg の tollInfo／「有料区間」を含む step 添字）、非一致 leg の失敗検査コード、検証専用呼出の変種 V-t（avoidTolls）。
- *        診断に案内文の文字列・座標・距離・秒・円は出さない（v2.3 §3）。コード表は README-adapter.md「1.1.1 診断コード表」
+ *        コード表は README-adapter.md「1.1.1 診断コード表」
  *
  * 1.2.0：出口 E-name の改訂（v2.4 §1）。実機（DG、2026-11-01 20:24）の step 構造に合わせる。判定規則のうち E-name 以外（形状照合・E-geo・料金・要求生成）は 1.1.1 と同一。
  *        出口：(a) 高速 leg の step 列を末尾から遡り、到着 step（最後の 1 つ）を除いた最後の RAMP_*／FORK_* を出口操作 step とする
@@ -28,7 +28,7 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 'rf7-adapter-1.4.0';
+  const VERSION = 'rf7-adapter-1.4.1';
 
   // ================================================================ 固定設定（§5.2 V2 の閾値は実行前に固定。変更は理由付きで全件再判定）
   const CONFIG = Object.freeze({
@@ -255,7 +255,7 @@
   const mainNodeIdOf = e => (e.kind === 'on_ramp' ? e.to : e.from);
   /**
    * ランプ群（v2.1 §5.2：同一 ic_id・kind・dir）と吸着リスク端点（v2.2 §2.2：一般道側端点から本線・JCT 連絡路が RISK_M 以内）・群内識別不能対（端点が END_M 以内）を事前計算する。
-   * 群の本線側端点が 1 つでなければ警告して群化しない（その群のランプは単独扱い）。geom_gap 辺の集合も作る。
+   * 群の本線側端点が 1 つでなければ警告して群化しない（単独扱い）。geom_gap 辺の集合も作る。
    */
   function buildRampInfo(gi) {
     const cfg = CONFIG;
@@ -736,7 +736,7 @@
 
   /**
    * SA/PA 同値経路：予定と別経路が分かれる区間のどれもが、一方に SA/PA 側道（'sapa.' ノード）を通り、もう一方がそれを通らない（本線をそのまま走る）形のもの。
-   * 乗車（入口・出口・料金影響辺）は同じで engine では同一 ID の候補なので、対抗経路（取り違えの原因）ではなく同じ候補の走り方の違いとして扱う（README の解釈事項）。
+   * 乗車（入口・出口・料金影響辺）は同じで engine では同一 ID の候補なので、対抗経路ではなく同じ候補の走り方の違いとして扱う。
    */
   function isSapaEquiv(gi, pathA, pathB) {
     const nodesOf = ids => { const l = [gi.edges.get(ids[0]).from]; ids.forEach(id => l.push(gi.edges.get(id).to)); return l; };
@@ -1747,7 +1747,7 @@
     return {
       id: c.id, n: c.n, intermediates: c.intermediates, fareCount: c.fareCount, restrictionUnresolved: !!c.restrictionUnresolved,
       seeded: !!c.seeded, estSec: r3(c.estSec), estTollJpy: c.estTollJpy, divKey: c.divKey,
-      rides: c.rides.map(r => ({ on: r.on, off: r.off, fare: r.fare.slice() })),
+      rides: c.rides.map(r => ({ on: r.on, off: r.off, fare: r.fare.slice(), path: (r.path || []).slice() })),
     };
   }
   /**
@@ -1767,7 +1767,7 @@
       searchId: search.searchId, label: ctx.label || null, kind: ctx.kind || 'free', generation: search.generation,
       cond: clone(search.cond),
       generations: Object.keys(gens).map(k => gens[k]),
-      options: { budget: o.budget, maxRetries: o.maxRetries, topN: o.topN, maxLabels: o.maxLabels, maxMs: o.maxMs, directSlots: o.directSlots, seedIcCount: o.seedIcCount, pointsPerRide: o.pointsPerRide, maxIntermediates: o.maxIntermediates, profile: o.profile },
+      options: { budget: o.budget, maxRetries: o.maxRetries, topN: o.topN, maxLabels: o.maxLabels, maxMs: o.maxMs, directSlots: o.directSlots, seedIcCount: o.seedIcCount, pointsPerRide: o.pointsPerRide, maxIntermediates: o.maxIntermediates, profile: o.profile, splitReserve: o.splitReserve || 0, lowShareBack: o.lowShareBack || 0, resplitOrder: o.resplitOrder || 'saving' },
       enumStats: { complete: en.complete, truncated: en.truncated, candidates: en.stats.candidates, byRides: en.stats.byRides, labelsCreated: en.stats.labelsCreated, labelsExpanded: en.stats.labelsExpanded, elapsedMs: en.stats.elapsedMs, seedRegistered: en.stats.seed ? en.stats.seed.registered : null, separated: en.stats.separated ? clone(en.stats.separated) : null },
       budget: { B: search.budget.B, used: search.budget.used, retriesUsed: search.budget.retriesUsed, waitsMs: search.budget.waitsMs.slice() },
       stopped: search.stopped || null,
@@ -1942,7 +1942,7 @@
       searchId: exp.searchId, label: exp.label, kind: exp.kind, generation: exp.generation,
       cond: clone(exp.cond), generations: clone(exp.generations), options: clone(exp.options),
       enumStats: clone(exp.enumStats), budget: clone(exp.budget), stopped: exp.stopped,
-      candidates: exp.candidates.map(c => ({ id: c.id, n: c.n, intermediates: c.intermediates, fareCount: c.fareCount, restrictionUnresolved: !!c.restrictionUnresolved, seeded: !!c.seeded, divKey: c.divKey, label: labelOf(c.id), rides: clone(c.rides) })),
+      candidates: exp.candidates.map(c => ({ id: c.id, n: c.n, intermediates: c.intermediates, fareCount: c.fareCount, restrictionUnresolved: !!c.restrictionUnresolved, seeded: !!c.seeded, divKey: c.divKey, label: labelOf(c.id), rides: c.rides.map(r => ({ on: r.on, off: r.off, fare: r.fare.slice() })) })),
       calls,
       rank: {
         status: exp.rank.status, baseOk: exp.rank.baseOk, baseReason: exp.rank.baseReason, enumerated: exp.rank.enumerated, enumComplete: exp.rank.enumComplete,
