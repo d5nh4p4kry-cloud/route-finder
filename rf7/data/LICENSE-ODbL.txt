@@ -16,6 +16,10 @@ The following files are Derivative Databases made from OpenStreetMap data and ar
   - graph-small.app.json        (アプリ用の軽量版 / lightweight version for the app)
   - graph_small.json            (完全版 / full version)
   - graph_small.osm-only.json   (OSM のみ / OSM only)
+  - graph-kanto.app.json        (関東のアプリ用の軽量版 / lightweight version for the app, Kanto)
+  - graph_kanto.json            (関東の完全版 / full version, Kanto)
+  - graph_kanto.osm-only.json   (関東の OSM のみ / OSM only, Kanto)
+  - ../base5a/graph_small.json.bak.20261101b   (検証用の段階5a-1 の完全版。N06 由来の項目を含む / stage 5a-1 full version for verification; contains N06 fields)
 
 graph-small.app.json と graph_small.json には、国土数値情報（高速道路時系列データ）由来の名称・種別・
 接合部ID（CC BY 4.0）も含まれます。結合後のデータベースは ODbL として扱い、国土数値情報の出典表示を併記します。
@@ -23,6 +27,13 @@ n06_small.json は国土数値情報のみの抽出であり、ODbL ではなく
 graph-small.app.json and graph_small.json also contain names, types and joint IDs derived from the
 Japanese National Land Numerical Information (N06, CC BY 4.0). The combined database is treated as ODbL and
 carries the N06 attribution as well. n06_small.json contains only the N06 extract and is CC BY 4.0, not ODbL.
+
+graph-kanto.app.json と graph_kanto.json には、国土数値情報（高速道路時系列データ）由来の名称・種別・
+接合部ID（CC BY 4.0）も含まれます。結合後のデータベースは ODbL として扱い、国土数値情報の出典表示を併記します。
+n06_kanto.json は国土数値情報のみの抽出であり、ODbL ではなく CC BY 4.0 です（別ファイル）。
+graph-kanto.app.json and graph_kanto.json also contain names, types and joint IDs derived from the
+Japanese National Land Numerical Information (N06, CC BY 4.0). The combined database is treated as ODbL and
+carries the N06 attribution as well. n06_kanto.json contains only the N06 extract and is CC BY 4.0, not ODbL.
 
 帰属表示 / Attribution
 ----------------------

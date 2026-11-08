@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rf7 計測ページ</title>
+<body>
+<h1>rf7 計測ページ</h1>
+<p id="version"></p>
+<p>このページは Google に問い合わせません。</p>
+<p>端末への保存は行いません。処理時間と件数を計測します。</p>
+<h2>ファイルの一致</h2>
+<pre id="files">確認中</pre>
+<button id="start" disabled>計測を始める</button>
+<p id="status" role="status"></p>
+<textarea id="mainResult" readonly aria-label="計測の結果"></textarea>
+<button id="copyMain" disabled>結果をコピー</button>
+<h2>余裕の確かめ（任意）</h2>
+<button id="x2" disabled>余裕の確かめ（任意）</button>
+<p id="x2Status" role="status"></p>
+<textarea id="x2Result" readonly aria-label="余裕の確かめの結果"></textarea>
+<button id="copyX2" disabled>結果をコピー</button>
+<p id="copyStatus" role="status"></p>
+<script src="bench.js"></script>
+<script>
+'use strict';
+const el = id => document.getElementById(id);
+const env = {
+  now: () => performance.now(),
+  load: RF7Bench.makeLoad((u, i) => fetch(u, i), location.href),
+  sha256: async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join(''),
+  utf8: text => new TextEncoder().encode(text),
+  ua: navigator.userAgent,
+  install: async by => {
+    for (const f of RF7Bench.FILES.filter(f => f.type === 'script')) {
+      if (!by[f.key].match) throw new Error('script の不一致');
+      const script = document.createElement('script');
+      script.textContent = by[f.key].text;
+      document.head.appendChild(script);
+    }
+    env.E = self.RFEngine;
+    env.A = self.RF7Adapter;
+    env.kantoText = by.kanto.text;
+  }
+};
+el('version').textContent = RF7Bench.VERSION;
+const paint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+async function copy(id) {
+  try {
+    await navigator.clipboard.writeText(el(id).value);
+    el('copyStatus').textContent = 'コピーしました';
+  } catch (error) {
+    el(id).focus();
+    el(id).select();
+    el(id).setSelectionRange(0, el(id).value.length);
+    el('copyStatus').textContent = '結果の文字を全部選択しました。長押しでコピーしてください。';
+  }
+}
+el('copyMain').onclick = () => copy('mainResult');
+el('copyX2').onclick = () => copy('x2Result');
+el('start').onclick = async () => {
+  el('start').disabled = true;
+  el('x2').disabled = true;
+  el('copyMain').disabled = true;
+  el('copyX2').disabled = true;
+  el('mainResult').value = '';
+  el('x2Result').value = '';
+  el('x2Status').textContent = '';
+  el('status').textContent = '計測中';
+  await paint();
+  try {
+    const result = await RF7Bench.runMain(env);
+    el('mainResult').value = JSON.stringify(result);
+    el('status').textContent = '完了';
+    el('copyMain').disabled = false;
+    el('x2').disabled = false;
+  } catch (error) {
+    el('status').textContent = '計測失敗: ' + error.message;
+  }
+};
+el('x2').onclick = async () => {
+  el('x2').disabled = true;
+  el('x2Status').textContent = '計測中';
+  await paint();
+  try {
+    el('x2Result').value = JSON.stringify(RF7Bench.runX2(env, env.kantoText));
+    el('x2Status').textContent = '完了';
+    el('copyX2').disabled = false;
+  } catch (error) {
+    el('x2Status').textContent = '計測失敗: ' + error.message;
+  }
+};
+RF7Bench.checkFiles(env).then(result => {
+  el('files').textContent = result.files.map(f => [f.path, f.bytes, f.sha256, f.match ? '一致' : '不一致'].join(' ')).join('\n');
+  el('start').disabled = !result.files.every(f => f.match);
+}).catch(error => { el('files').textContent = '確認失敗: ' + error.message; });
+</script>
+</body>
+</html>

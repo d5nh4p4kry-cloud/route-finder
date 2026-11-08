@@ -1,0 +1,3419 @@
+{
+  "approved_same_fare_pairs": [],
+  "bbox": {
+    "latMax": 37.2,
+    "latMin": 34.85,
+    "lngMax": 140.95,
+    "lngMin": 138.75
+  },
+  "decisions": [
+    {
+      "basis": "計画§9の6項目承認。首都高以外は全本線の同一operatorのみ採用、料金区分不明、toll無し除外、toll=yes接続道路のみの点除外、方向票無しは幾何、地域kanto。",
+      "id": "D-007"
+    },
+    {
+      "basis": "台場線は有料路線。首都高の自動指定をtoll無し除外より優先。",
+      "id": "D-009"
+    },
+    {
+      "basis": "別名17を親9路線に統合。N06閾値10、未解決11を根拠付き解消。無料候補4はタグに従う・未承認。除外12キーが正しい。調査詳細をwork/t3bへ分離。",
+      "id": "T3-review §2"
+    },
+    {
+      "basis": "Tak 2026-11-07: 伊豆縦貫自動車道を無料路線とする。無料候補は承認済みの決定に置換。事業者・料金区分はD-007の既定の不明を維持。",
+      "id": "D-012"
+    },
+    {
+      "basis": "Tak 2026-11-07: 修善寺道路を有料路線・対象とする。tollタグなし除外より優先。事業者・料金区分はD-007の既定の不明を維持。",
+      "id": "D-013"
+    }
+  ],
+  "default_unknown": "不明",
+  "draft_sha256": "1531dfbcd4b02db1b71d6aad6ad35e12c5695c501fb31ae9e590c1a48493157a",
+  "format": "rf-route-ledger/1",
+  "input_sha256": {
+    "n06/N06-25_HighwaySection.geojson": "5ee02732ed5ea70452f9fd5001fed05c43867af198e403bf6caf681d1709b2b7",
+    "n06/N06-25_Joint.geojson": "c1446de67ed736624691df579157f87fd3c12ea8c49b54c4dcd97081f428c7d9",
+    "raw5b/chubu.json": "c7c7e770d3ff7474aa62ddb5bc8298504157451fd178291b7fd383c0d1dc4b22",
+    "raw5b/kanto.json": "c389c80fefb7073c23858e92a63af2be3c6cf16c87e22a45d76e5b2e72a41284",
+    "raw5b/tohoku.json": "a9acb143babd0bc7f4dceee54d8671621e43f5cbe4e7269f9447e00fd11fa155"
+  },
+  "n06_correspondence": {
+    "distance_m": 50,
+    "minimum_consecutive": 10,
+    "sample_step_m": 100
+  },
+  "osm_base": "2026-11-03T21:24:23Z",
+  "plan_sha256": "be6592a73900be59cc8e59f78fe3cc66ef76fd817dd32ccdbc06acacd5b7ade5",
+  "previous_sha256": "b91a15a9cb54fd6bb997808e1eb81c1f5caad30905b911110a3d94cae0b5f38d",
+  "region": "kanto",
+  "review_sha256": "67e5a75a52b64c9aef894c7f76de0faa7f6132ed70509cafa6e5e696e7c99a74",
+  "routes": [
+    {
+      "candidate": null,
+      "display_name": "あぶくま高原道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r187da9e4a1",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "あぶくま高原道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "アネスト岩田 ターンパイク箱根 箱根伊豆連絡線",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r7e9c3ee961",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "アネスト岩田 ターンパイク箱根 箱根伊豆連絡線",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "関越自動車道",
+        "common_refs": [
+          "E17"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              480413049
+            ],
+            "parent_contact_nodes": [
+              1879793192,
+              2352110408
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              480413049
+            ],
+            "node": 1879793192,
+            "parent_ways": [
+              226379562
+            ],
+            "refs": {
+              "226379562": "E17",
+              "480413049": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              480413049
+            ],
+            "node": 2352110408,
+            "parent_ways": [
+              177563757
+            ],
+            "refs": {
+              "177563757": "E17",
+              "480413049": "E17"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "万太郎橋",
+        "old_key": "rc0f96f463c",
+        "parent_key": "re32e40a0e3",
+        "verified": true,
+        "way_ids": [
+          480413049
+        ]
+      },
+      "alias_of": "関越自動車道",
+      "candidate": null,
+      "display_name": "万太郎橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "万太郎橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "三浦縦貫道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r213dd39462",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "三浦縦貫道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "上信越自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r0e505d6974",
+      "n06_routes": [
+        "関越自動車道上越線",
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "上信越自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "上越魚沼地域振興快速道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "rd62e13b060",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "上越魚沼地域振興快速道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "中央自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r35baf984d2",
+      "n06_routes": [
+        "中央自動車道富士吉田線",
+        "中央自動車道西宮線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "中央自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "関越自動車道",
+        "common_refs": [
+          "E17"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              193663913
+            ],
+            "parent_contact_nodes": [
+              549451969,
+              2041840525
+            ]
+          },
+          {
+            "alias_ways": [
+              193663915
+            ],
+            "parent_contact_nodes": [
+              252179787,
+              2041840523
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              193663915
+            ],
+            "node": 252179787,
+            "parent_ways": [
+              43528214
+            ],
+            "refs": {
+              "193663915": "E17",
+              "43528214": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              193663913
+            ],
+            "node": 549451969,
+            "parent_ways": [
+              177144095
+            ],
+            "refs": {
+              "177144095": "E17",
+              "193663913": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              193663915
+            ],
+            "node": 2041840523,
+            "parent_ways": [
+              193663912
+            ],
+            "refs": {
+              "193663912": "E17",
+              "193663915": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              193663913
+            ],
+            "node": 2041840525,
+            "parent_ways": [
+              193663911
+            ],
+            "refs": {
+              "193663911": "E17",
+              "193663913": "E17"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "京目橋",
+        "old_key": "rfa0c9f6298",
+        "parent_key": "re32e40a0e3",
+        "verified": true,
+        "way_ids": [
+          193663913,
+          193663915
+        ]
+      },
+      "alias_of": "関越自動車道",
+      "candidate": null,
+      "display_name": "京目橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "京目橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "京葉道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r9459aa655a",
+      "n06_routes": [
+        "京葉道路",
+        "東関東自動車道館山線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "京葉道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "伊豆中央道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r4cf6506d4f",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "伊豆中央道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "伊豆縦貫自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-07: 伊豆縦貫自動車道を無料路線とする。東駿河湾環状道路・天城北道路・河津下田道路などは無料（D-012）。",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "無料路線",
+      "key": "r5314628d9a",
+      "n06_routes": [
+        "伊豆縦貫自動車道",
+        "天城北道路",
+        "東駿河湾環状道路"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "伊豆縦貫自動車道",
+      "operator": "不明",
+      "toll_handling": "無料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "保土ヶ谷バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: 保土ヶ谷無料",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "無料路線",
+      "key": "r95f7fa706b",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "第一東海自動車道": 1
+        },
+        "names_300m": {
+          "第一東海自動車道": 12
+        },
+        "result": "N06に路線なし",
+        "samples": 238,
+        "within_300m": 12
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "保土ヶ谷バイパス",
+      "operator": "不明",
+      "toll_handling": "無料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "修善寺道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-07: 修善寺道路は1回ごとの料金がある有料道路。tollタグなし除外より有料路線の決定を優先（D-013）。",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re75cc4acf5",
+      "n06_routes": [
+        "修善寺道路"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "修善寺道路",
+      "operator": "不明",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "前橋渋川バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "rd3b07d0495",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "前橋渋川バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "北関東自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r3db9435e25",
+      "n06_routes": [
+        "北関東自動車道"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "北関東自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "千葉東金道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rdde9cf9e75",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "千葉東金道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "南本牧はま道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "r55d7dc7107",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "首都高速湾岸線": 3
+        },
+        "names_300m": {
+          "首都高速湾岸線": 23
+        },
+        "result": "N06に路線なし",
+        "samples": 51,
+        "within_300m": 23
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "南本牧はま道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "関越自動車道",
+        "common_refs": [
+          "E17"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              115922984
+            ],
+            "parent_contact_nodes": [
+              252341831,
+              1308318133
+            ]
+          },
+          {
+            "alias_ways": [
+              115922802
+            ],
+            "parent_contact_nodes": [
+              252180831,
+              1308318047
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              115922802
+            ],
+            "node": 252180831,
+            "parent_ways": [
+              245474543
+            ],
+            "refs": {
+              "115922802": "E17",
+              "245474543": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              115922984
+            ],
+            "node": 252341831,
+            "parent_ways": [
+              245474593
+            ],
+            "refs": {
+              "115922984": "E17",
+              "245474593": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              115922802
+            ],
+            "node": 1308318047,
+            "parent_ways": [
+              115922948
+            ],
+            "refs": {
+              "115922802": "E17",
+              "115922948": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              115922984
+            ],
+            "node": 1308318133,
+            "parent_ways": [
+              115922794
+            ],
+            "refs": {
+              "115922794": "E17",
+              "115922984": "E17"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "坪池橋",
+        "old_key": "r36227b1436",
+        "parent_key": "re32e40a0e3",
+        "verified": true,
+        "way_ids": [
+          115922802,
+          115922984
+        ]
+      },
+      "alias_of": "関越自動車道",
+      "candidate": null,
+      "display_name": "坪池橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "坪池橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "富津館山道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r95630fa935",
+      "n06_routes": [
+        "富津館山道路"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "富津館山道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "小名浜道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "rc8df9dd3f7",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "常磐自動車道": 1
+        },
+        "names_300m": {
+          "常磐自動車道": 13
+        },
+        "result": "N06に路線なし",
+        "samples": 160,
+        "within_300m": 13
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "小名浜道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "中央自動車道",
+        "common_refs": [
+          "E20"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              28562776
+            ],
+            "parent_contact_nodes": [
+              308923330,
+              313770988
+            ]
+          },
+          {
+            "alias_ways": [
+              28562774
+            ],
+            "parent_contact_nodes": [
+              267803517,
+              313770977
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              28562774
+            ],
+            "node": 267803517,
+            "parent_ways": [
+              28562785
+            ],
+            "refs": {
+              "28562774": "E20",
+              "28562785": "E20"
+            }
+          },
+          {
+            "alias_ways": [
+              28562776
+            ],
+            "node": 308923330,
+            "parent_ways": [
+              28562777
+            ],
+            "refs": {
+              "28562776": "E20",
+              "28562777": "E20"
+            }
+          },
+          {
+            "alias_ways": [
+              28562774
+            ],
+            "node": 313770977,
+            "parent_ways": [
+              28562775
+            ],
+            "refs": {
+              "28562774": "E20",
+              "28562775": "E20"
+            }
+          },
+          {
+            "alias_ways": [
+              28562776
+            ],
+            "node": 313770988,
+            "parent_ways": [
+              28562781
+            ],
+            "refs": {
+              "28562776": "E20",
+              "28562781": "E20"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "小柳第二橋",
+        "old_key": "r0f155e21fb",
+        "parent_key": "r35baf984d2",
+        "verified": true,
+        "way_ids": [
+          28562774,
+          28562776
+        ]
+      },
+      "alias_of": "中央自動車道",
+      "candidate": null,
+      "display_name": "小柳第二橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r35baf984d2",
+      "n06_routes": [
+        "中央自動車道富士吉田線",
+        "中央自動車道西宮線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "小柳第二橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "小田原厚木道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r9a09577ef2",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "第二東海自動車道": 1
+        },
+        "names_300m": {
+          "第二東海自動車道": 16
+        },
+        "result": "N06に路線なし",
+        "samples": 628,
+        "within_300m": 16
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "小田原厚木道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "常磐自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r05bc85caa3",
+      "n06_routes": [
+        "常磐自動車道"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "常磐自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "常陸那珂有料道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re5119ea296",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "東水戸道路": 1
+        },
+        "names_300m": {
+          "東水戸道路": 8
+        },
+        "result": "N06に路線なし",
+        "samples": 60,
+        "within_300m": 8
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "常陸那珂有料道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": "無料候補（toll=yesが無く、noの明示あり。区間の事実に限定。未承認）",
+      "display_name": "常陸那珂港南線",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rf587b57959",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "常陸那珂港南線",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "御殿場バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "ra63b0dae41",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "御殿場バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "中央自動車道",
+        "common_refs": [],
+        "components": [
+          {
+            "alias_ways": [
+              28562801
+            ],
+            "parent_contact_nodes": [
+              260715041,
+              313771015
+            ]
+          },
+          {
+            "alias_ways": [
+              28562797
+            ],
+            "parent_contact_nodes": [
+              267803523,
+              313771012
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              28562801
+            ],
+            "node": 260715041,
+            "parent_ways": [
+              26926901
+            ],
+            "refs": {
+              "26926901": "E20",
+              "28562801": null
+            }
+          },
+          {
+            "alias_ways": [
+              28562797
+            ],
+            "node": 267803523,
+            "parent_ways": [
+              28562793
+            ],
+            "refs": {
+              "28562793": "E20",
+              "28562797": null
+            }
+          },
+          {
+            "alias_ways": [
+              28562797
+            ],
+            "node": 313771012,
+            "parent_ways": [
+              28562800
+            ],
+            "refs": {
+              "28562797": null,
+              "28562800": "E20"
+            }
+          },
+          {
+            "alias_ways": [
+              28562801
+            ],
+            "node": 313771015,
+            "parent_ways": [
+              28562804
+            ],
+            "refs": {
+              "28562801": null,
+              "28562804": "E20"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "押立第一橋",
+        "old_key": "rbd62f21571",
+        "parent_key": "r35baf984d2",
+        "verified": true,
+        "way_ids": [
+          28562797,
+          28562801
+        ]
+      },
+      "alias_of": "中央自動車道",
+      "candidate": null,
+      "display_name": "押立第一橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r35baf984d2",
+      "n06_routes": [
+        "中央自動車道富士吉田線",
+        "中央自動車道西宮線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "押立第一橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "新東名高速道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rbc0e477a08",
+      "n06_routes": [
+        "第二東海自動車道"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "新東名高速道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "新湘南バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r4081ea8c15",
+      "n06_routes": [
+        "新湘南バイパス"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "新湘南バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "新空港自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rf13c55bfca",
+      "n06_routes": [
+        "新東京国際空港線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "新空港自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "新見沼大橋有料道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rd52f6f9c39",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "新見沼大橋有料道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "日光宇都宮道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r500d0906f8",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "日光宇都宮道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "日立有料道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r49bd5fc6ee",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "日立有料道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "日高バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "r0faed6866f",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "日高バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": "無料候補（toll=yesが無く、noの明示あり。区間の事実に限定。未承認）",
+      "display_name": "本町山中道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r4b9fb270d9",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "本町山中道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "関越自動車道",
+        "common_refs": [
+          "E17"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              177144093
+            ],
+            "parent_contact_nodes": [
+              1876014915,
+              1876014918
+            ]
+          },
+          {
+            "alias_ways": [
+              177144094
+            ],
+            "parent_contact_nodes": [
+              1876014904,
+              1876014914
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              177144094
+            ],
+            "node": 1876014904,
+            "parent_ways": [
+              232352091
+            ],
+            "refs": {
+              "177144094": "E17",
+              "232352091": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              177144094
+            ],
+            "node": 1876014914,
+            "parent_ways": [
+              177144092
+            ],
+            "refs": {
+              "177144092": "E17",
+              "177144094": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              177144093
+            ],
+            "node": 1876014915,
+            "parent_ways": [
+              232352090
+            ],
+            "refs": {
+              "177144093": "E17",
+              "232352090": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              177144093
+            ],
+            "node": 1876014918,
+            "parent_ways": [
+              117760473
+            ],
+            "refs": {
+              "117760473": "E17",
+              "177144093": "E17"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "村前橋",
+        "old_key": "ra646c40b9d",
+        "parent_key": "re32e40a0e3",
+        "verified": true,
+        "way_ids": [
+          177144093,
+          177144094
+        ]
+      },
+      "alias_of": "関越自動車道",
+      "candidate": null,
+      "display_name": "村前橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "村前橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東京外環自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rf0084f0d3b",
+      "n06_routes": [
+        "常磐自動車道",
+        "東北縦貫自動車道弘前線",
+        "東関東自動車道水戸線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "東京外環自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東京湾アクアライン",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r0df6a1b076",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "首都高速湾岸線": 1,
+          "首都高速神奈川6号川崎線": 1
+        },
+        "names_300m": {
+          "首都高速湾岸線": 6,
+          "首都高速神奈川6号川崎線": 6
+        },
+        "result": "N06に路線なし",
+        "samples": 297,
+        "within_300m": 6
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "東京湾アクアライン",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東京湾アクアライン連絡道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r1b511977ff",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "東関東自動車道館山線": 1,
+          "首都圏中央連絡自動車道": 1
+        },
+        "names_300m": {
+          "東関東自動車道館山線": 8,
+          "首都圏中央連絡自動車道": 6
+        },
+        "result": "N06に路線なし",
+        "samples": 180,
+        "within_300m": 8
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "東京湾アクアライン連絡道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東北自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rb152de09fc",
+      "n06_routes": [
+        "北関東自動車道",
+        "東北縦貫自動車道弘前線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "東北自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東名高速道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "tomei",
+      "n06_routes": [
+        "第一東海自動車道"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "東名高速道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東国文化歴史街道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "r22b73050b0",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "東国文化歴史街道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東富士五湖道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re5a015f574",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "東富士五湖道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東水戸道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r043e3ef490",
+      "n06_routes": [
+        "東水戸道路"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "東水戸道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "東関東自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r8e37160877",
+      "n06_routes": [
+        "東関東自動車道水戸線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "東関東自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "東関東自動車道",
+        "common_refs": [
+          "E51"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              1334735360
+            ],
+            "parent_contact_nodes": [
+              7995076167,
+              11837220601
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              1334735360
+            ],
+            "node": 7995076167,
+            "parent_ways": [
+              1334735361
+            ],
+            "refs": {
+              "1334735360": "E51",
+              "1334735361": "E51"
+            }
+          },
+          {
+            "alias_ways": [
+              1334735360
+            ],
+            "node": 11837220601,
+            "parent_ways": [
+              172040771
+            ],
+            "refs": {
+              "1334735360": "E51",
+              "172040771": "E51"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "東関東自動車道 (う回路)",
+        "old_key": "r9de2f35131",
+        "parent_key": "r8e37160877",
+        "verified": true,
+        "way_ids": [
+          1334735360
+        ]
+      },
+      "alias_of": "東関東自動車道",
+      "candidate": null,
+      "display_name": "東関東自動車道 (う回路)",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r8e37160877",
+      "n06_routes": [
+        "東関東自動車道水戸線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "東関東自動車道 (う回路)",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "関越自動車道",
+        "common_refs": [
+          "E17"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              232352073
+            ],
+            "parent_contact_nodes": [
+              2407075981,
+              2407075985
+            ]
+          },
+          {
+            "alias_ways": [
+              232352074
+            ],
+            "parent_contact_nodes": [
+              2407075980,
+              2407075984
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              232352074
+            ],
+            "node": 2407075980,
+            "parent_ways": [
+              193663912
+            ],
+            "refs": {
+              "193663912": "E17",
+              "232352074": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              232352073
+            ],
+            "node": 2407075981,
+            "parent_ways": [
+              193663911
+            ],
+            "refs": {
+              "193663911": "E17",
+              "232352073": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              232352074
+            ],
+            "node": 2407075984,
+            "parent_ways": [
+              1572292897
+            ],
+            "refs": {
+              "1572292897": "E17",
+              "232352074": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              232352073
+            ],
+            "node": 2407075985,
+            "parent_ways": [
+              1572292895
+            ],
+            "refs": {
+              "1572292895": "E17",
+              "232352073": "E17"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "染谷川橋",
+        "old_key": "r4af544e2d5",
+        "parent_key": "re32e40a0e3",
+        "verified": true,
+        "way_ids": [
+          232352073,
+          232352074
+        ]
+      },
+      "alias_of": "関越自動車道",
+      "candidate": null,
+      "display_name": "染谷川橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "染谷川橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "横浜新道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r4b8b76d2bd",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "横浜新道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "横浜横須賀道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r3171c26388",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "首都高速神奈川3号狩場線": 1
+        },
+        "names_300m": {
+          "首都高速神奈川3号狩場線": 12
+        },
+        "result": "N06に路線なし",
+        "samples": 682,
+        "within_300m": 12
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "横浜横須賀道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "横浜横須賀道路(金沢支線)",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r6b2154add4",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "首都高速湾岸線": 2
+        },
+        "names_300m": {
+          "首都高速湾岸線": 10
+        },
+        "result": "N06に路線なし",
+        "samples": 77,
+        "within_300m": 10
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "横浜横須賀道路(金沢支線)",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "水海道有料道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r6f3d12bd91",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "水海道有料道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "無名の接続路:45021974",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rab82421b5b",
+      "n06_resolution": {
+        "basis": "way 45021974、全長約290mの3標本が首都高速1号羽田線から50m以内。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "首都高速1号羽田線": 3
+        },
+        "names_300m": {
+          "首都高速11号台場線": 3,
+          "首都高速1号羽田線": 3
+        },
+        "result": "首都高速1号羽田線",
+        "samples": 3,
+        "within_300m": 3
+      },
+      "n06_routes": [
+        "首都高速1号羽田線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "無名の接続路:45021974",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "皆野寄居バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r05bdd8a0f5",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "皆野寄居バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "真鶴道路",
+        "common_refs": [
+          "135"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              131328235
+            ],
+            "parent_contact_nodes": [
+              1445559775,
+              1446277435
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              131328235
+            ],
+            "node": 1445559775,
+            "parent_ways": [
+              131328876
+            ],
+            "refs": {
+              "131328235": "135",
+              "131328876": "135"
+            }
+          },
+          {
+            "alias_ways": [
+              131328235
+            ],
+            "node": 1446277435,
+            "parent_ways": [
+              971108066
+            ],
+            "refs": {
+              "131328235": "135",
+              "971108066": "135"
+            }
+          }
+        ],
+        "criterion": "(イ) 同じref・親路線名の表記違い",
+        "normalized_name": "真鶴トンネル(真鶴道路)",
+        "old_key": "rfd5cb034d3",
+        "parent_key": "r90a5089ab6",
+        "verified": true,
+        "way_ids": [
+          131328235
+        ]
+      },
+      "alias_of": "真鶴道路",
+      "candidate": null,
+      "display_name": "真鶴トンネル(真鶴道路)",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r90a5089ab6",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "真鶴トンネル(真鶴道路)",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "真鶴道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r90a5089ab6",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "真鶴道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "磐越自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r4e9e2b5d14",
+      "n06_routes": [
+        "東北横断自動車道いわき新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "磐越自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "第三京浜道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r6d20c8a810",
+      "n06_resolution": {
+        "basis": "当該名のN06現役区間なし。他路線との近接のみ。",
+        "decision": "T3-review §2-2 (3)",
+        "max_consecutive_50m": {
+          "首都高速神奈川2号三ツ沢線": 4,
+          "首都高速神奈川7号横浜北線": 2,
+          "高速横浜環状北西線": 1
+        },
+        "names_300m": {
+          "首都高速神奈川2号三ツ沢線": 13,
+          "首都高速神奈川7号横浜北線": 14,
+          "高速横浜環状北西線": 13
+        },
+        "result": "N06に路線なし",
+        "samples": 324,
+        "within_300m": 28
+      },
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "第三京浜道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": "無料候補（toll=yesが無く、noの明示あり。区間の事実に限定。未承認）",
+      "display_name": "箱根新道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rb435d76e5e",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "箱根新道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "東北自動車道",
+        "common_refs": [
+          "E4"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              497992976
+            ],
+            "parent_contact_nodes": [
+              1242334723,
+              4894834760
+            ]
+          },
+          {
+            "alias_ways": [
+              497992974
+            ],
+            "parent_contact_nodes": [
+              370258483,
+              370258486
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              497992974
+            ],
+            "node": 370258483,
+            "parent_ways": [
+              497992975
+            ],
+            "refs": {
+              "497992974": "E4",
+              "497992975": "E4"
+            }
+          },
+          {
+            "alias_ways": [
+              497992974
+            ],
+            "node": 370258486,
+            "parent_ways": [
+              108197973
+            ],
+            "refs": {
+              "108197973": "E4",
+              "497992974": "E4"
+            }
+          },
+          {
+            "alias_ways": [
+              497992976
+            ],
+            "node": 1242334723,
+            "parent_ways": [
+              497992977
+            ],
+            "refs": {
+              "497992976": "E4",
+              "497992977": "E4"
+            }
+          },
+          {
+            "alias_ways": [
+              497992976
+            ],
+            "node": 4894834760,
+            "parent_ways": [
+              108197982
+            ],
+            "refs": {
+              "108197982": "E4",
+              "497992976": "E4"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "米川橋",
+        "old_key": "re0818fbccf",
+        "parent_key": "rb152de09fc",
+        "verified": true,
+        "way_ids": [
+          497992974,
+          497992976
+        ]
+      },
+      "alias_of": "東北自動車道",
+      "candidate": null,
+      "display_name": "米川橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rb152de09fc",
+      "n06_routes": [
+        "北関東自動車道",
+        "東北縦貫自動車道弘前線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "米川橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "芦ノ湖スカイライン",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rbec3ed4083",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "芦ノ湖スカイライン",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "西湘バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re444a913cc",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "西湘バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "東北自動車道",
+        "common_refs": [
+          "E4"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              108251817
+            ],
+            "parent_contact_nodes": [
+              1242335237,
+              1242335345
+            ]
+          },
+          {
+            "alias_ways": [
+              108251782
+            ],
+            "parent_contact_nodes": [
+              370258606,
+              370258607
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              108251782
+            ],
+            "node": 370258606,
+            "parent_ways": [
+              108251788
+            ],
+            "refs": {
+              "108251782": "E4",
+              "108251788": "E4"
+            }
+          },
+          {
+            "alias_ways": [
+              108251782
+            ],
+            "node": 370258607,
+            "parent_ways": [
+              108251752
+            ],
+            "refs": {
+              "108251752": "E4",
+              "108251782": "E4"
+            }
+          },
+          {
+            "alias_ways": [
+              108251817
+            ],
+            "node": 1242335237,
+            "parent_ways": [
+              498000218
+            ],
+            "refs": {
+              "108251817": "E4",
+              "498000218": "E4"
+            }
+          },
+          {
+            "alias_ways": [
+              108251817
+            ],
+            "node": 1242335345,
+            "parent_ways": [
+              108251763
+            ],
+            "refs": {
+              "108251763": "E4",
+              "108251817": "E4"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "谷津田川橋",
+        "old_key": "r0342ab0a17",
+        "parent_key": "rb152de09fc",
+        "verified": true,
+        "way_ids": [
+          108251782,
+          108251817
+        ]
+      },
+      "alias_of": "東北自動車道",
+      "candidate": null,
+      "display_name": "谷津田川橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "rb152de09fc",
+      "n06_routes": [
+        "北関東自動車道",
+        "東北縦貫自動車道弘前線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "谷津田川橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "豊岡バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "r74c2966df1",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "豊岡バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "銚子連絡道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r0d15cc0b9b",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "銚子連絡道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "関越自動車道",
+        "common_refs": [
+          "E17"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              1148013995
+            ],
+            "parent_contact_nodes": [
+              1879793190,
+              10681390844
+            ]
+          },
+          {
+            "alias_ways": [
+              1148013996
+            ],
+            "parent_contact_nodes": [
+              252180361,
+              10681390845
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              1148013996
+            ],
+            "node": 252180361,
+            "parent_ways": [
+              27602871
+            ],
+            "refs": {
+              "1148013996": "E17",
+              "27602871": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              1148013995
+            ],
+            "node": 1879793190,
+            "parent_ways": [
+              177563757
+            ],
+            "refs": {
+              "1148013995": "E17",
+              "177563757": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              1148013995
+            ],
+            "node": 10681390844,
+            "parent_ways": [
+              177563756
+            ],
+            "refs": {
+              "1148013995": "E17",
+              "177563756": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              1148013996
+            ],
+            "node": 10681390845,
+            "parent_ways": [
+              27602869
+            ],
+            "refs": {
+              "1148013996": "E17",
+              "27602869": "E17"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "関越トンネル",
+        "old_key": "r2cf25aed7b",
+        "parent_key": "re32e40a0e3",
+        "verified": true,
+        "way_ids": [
+          1148013995,
+          1148013996
+        ]
+      },
+      "alias_of": "関越自動車道",
+      "candidate": null,
+      "display_name": "関越トンネル",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "関越トンネル",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "関越自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "関越自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "雁坂トンネル有料道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "全wayで同一operatorタグ"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r564a962121",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "雁坂トンネル有料道路",
+      "operator": "山梨県道路公社",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "須走道路",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "r6a54ab47cb",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "須走道路",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "館山自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "r93c929de22",
+      "n06_routes": [
+        "東関東自動車道館山線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "館山自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "館山自動車道(木更津南支線)",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re479ab26d5",
+      "n06_routes": [
+        "東関東自動車道館山線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "館山自動車道(木更津南支線)",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都圏中央連絡自動車道",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "ken",
+      "n06_routes": [
+        "首都圏中央連絡自動車道"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都圏中央連絡自動車道",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速10号晴海線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r6a45e22f4b",
+      "n06_routes": [
+        "首都高速10号晴海線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速10号晴海線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速11号台場線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "Tak 決定済み 2026-11-06：有料路線。計画§2.3の首都高自動指定をTak決定2のtollタグなし除外より優先（台場線2キー）",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r276c44b18c",
+      "n06_routes": [
+        "首都高速11号台場線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速11号台場線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "首都高速11号台場線",
+        "common_refs": [
+          "11"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              316305907
+            ],
+            "parent_contact_nodes": [
+              2805815248,
+              7657973001
+            ]
+          },
+          {
+            "alias_ways": [
+              316305908
+            ],
+            "parent_contact_nodes": [
+              31236562,
+              31236584
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              316305908
+            ],
+            "node": 31236562,
+            "parent_ways": [
+              4847506
+            ],
+            "refs": {
+              "316305908": "11",
+              "4847506": "11"
+            }
+          },
+          {
+            "alias_ways": [
+              316305908
+            ],
+            "node": 31236584,
+            "parent_ways": [
+              316305909
+            ],
+            "refs": {
+              "316305908": "11",
+              "316305909": "11"
+            }
+          },
+          {
+            "alias_ways": [
+              316305907
+            ],
+            "node": 2805815248,
+            "parent_ways": [
+              202805895
+            ],
+            "refs": {
+              "202805895": "11",
+              "316305907": "11"
+            }
+          },
+          {
+            "alias_ways": [
+              316305907
+            ],
+            "node": 7657973001,
+            "parent_ways": [
+              316305910
+            ],
+            "refs": {
+              "316305907": "11",
+              "316305910": "11"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "首都高速11号台場線・東京港連絡橋",
+        "old_key": "r083176edaa",
+        "parent_key": "r276c44b18c",
+        "verified": true,
+        "way_ids": [
+          316305907,
+          316305908
+        ]
+      },
+      "alias_of": "首都高速11号台場線",
+      "candidate": null,
+      "display_name": "首都高速11号台場線・東京港連絡橋",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "Tak 決定済み 2026-11-06：有料路線。計画§2.3の首都高自動指定をTak決定2のtollタグなし除外より優先（台場線2キー）",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r276c44b18c",
+      "n06_routes": [
+        "首都高速11号台場線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速11号台場線・東京港連絡橋",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速1号上野線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r55d8ef13c4",
+      "n06_routes": [
+        "首都高速1号上野線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速1号上野線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速1号羽田線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r04612275e3",
+      "n06_routes": [
+        "首都高速1号羽田線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速1号羽田線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速2号目黒線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rd2c7dc1dc0",
+      "n06_routes": [
+        "首都高速2号目黒線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速2号目黒線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速3号渋谷線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "c3",
+      "n06_routes": [
+        "首都高速3号渋谷線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速3号渋谷線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速4号新宿線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r25b1a5854a",
+      "n06_routes": [
+        "首都高速4号新宿線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速4号新宿線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速5号池袋線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r59bd2f0fa7",
+      "n06_routes": [
+        "首都高速5号池袋線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速5号池袋線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速6号三郷線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r0688314cf2",
+      "n06_routes": [
+        "首都高速6号三郷線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速6号三郷線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速6号向島線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rc91b088eb8",
+      "n06_routes": [
+        "首都高速6号向島線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速6号向島線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速7号小松川線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r67e182ba68",
+      "n06_routes": [
+        "首都高速7号小松川線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速7号小松川線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速9号深川線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rb5d28df2c7",
+      "n06_routes": [
+        "首都高速9号深川線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速9号深川線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速中央環状線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rf447b05bca",
+      "n06_routes": [
+        "首都高速5号池袋線",
+        "首都高速中央環状線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速中央環状線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速埼玉大宮線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "re8a4ce9b89",
+      "n06_routes": [
+        "首都高速埼玉大宮線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速埼玉大宮線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速埼玉新都心線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rcad151d1d8",
+      "n06_routes": [
+        "首都高速埼玉新都心線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速埼玉新都心線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速川口線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rf018aacf03",
+      "n06_routes": [
+        "首都高速川口線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速川口線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速湾岸線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r0477cfb689",
+      "n06_routes": [
+        "首都高速湾岸線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速湾岸線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "首都高速神奈川3号狩場線",
+        "common_refs": [
+          "K3"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              32403531
+            ],
+            "parent_contact_nodes": [
+              364541743
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              32403531
+            ],
+            "node": 364541743,
+            "parent_ways": [
+              32403596
+            ],
+            "refs": {
+              "32403531": "K3",
+              "32403596": "K3"
+            }
+          }
+        ],
+        "criterion": "(イ) 同じref・親路線名の表記違い",
+        "normalized_name": "首都高速狩場線",
+        "old_key": "r1040246b61",
+        "parent_key": "r8c583ff22b",
+        "verified": true,
+        "way_ids": [
+          32403531
+        ]
+      },
+      "alias_of": "首都高速神奈川3号狩場線",
+      "candidate": null,
+      "display_name": "首都高速狩場線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r8c583ff22b",
+      "n06_routes": [
+        "首都高速神奈川3号狩場線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速狩場線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速神奈川1号横羽線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rb5656777a5",
+      "n06_routes": [
+        "首都高速神奈川1号横羽線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速神奈川1号横羽線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速神奈川2号三ツ沢線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r1261267d18",
+      "n06_routes": [
+        "首都高速神奈川2号三ツ沢線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速神奈川2号三ツ沢線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速神奈川3号狩場線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r8c583ff22b",
+      "n06_routes": [
+        "首都高速神奈川3号狩場線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速神奈川3号狩場線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速神奈川5号大黒線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r4a952540e0",
+      "n06_routes": [
+        "首都高速神奈川5号大黒線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速神奈川5号大黒線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速神奈川6号川崎線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "rb74d2139e6",
+      "n06_routes": [
+        "首都高速神奈川6号川崎線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速神奈川6号川崎線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速神奈川7号横浜北線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r09674d2cbd",
+      "n06_routes": [
+        "首都高速神奈川7号横浜北線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速神奈川7号横浜北線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速神奈川7号横浜北西線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r2fbfa8e37f",
+      "n06_routes": [
+        "高速横浜環状北西線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速神奈川7号横浜北西線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "首都高速6号三郷線",
+        "common_refs": [
+          "6"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              43992700
+            ],
+            "parent_contact_nodes": [
+              530886978
+            ]
+          },
+          {
+            "alias_ways": [
+              24336407
+            ],
+            "parent_contact_nodes": [
+              264005882
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              24336407
+            ],
+            "node": 264005882,
+            "parent_ways": [
+              1199150818
+            ],
+            "refs": {
+              "1199150818": "6",
+              "24336407": "6"
+            }
+          },
+          {
+            "alias_ways": [
+              43992700
+            ],
+            "node": 530886978,
+            "parent_ways": [
+              846888239
+            ],
+            "refs": {
+              "43992700": "6",
+              "846888239": "6"
+            }
+          }
+        ],
+        "criterion": "(イ) 同じref・親路線名の表記違い",
+        "normalized_name": "首都高速道路6号三郷線",
+        "old_key": "r544cb6890b",
+        "parent_key": "r0688314cf2",
+        "verified": true,
+        "way_ids": [
+          24336407,
+          43992700
+        ]
+      },
+      "alias_of": "首都高速6号三郷線",
+      "candidate": null,
+      "display_name": "首都高速道路6号三郷線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r0688314cf2",
+      "n06_routes": [
+        "首都高速6号三郷線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速道路6号三郷線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "首都高速都心環状線",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r9f594a34dc",
+      "n06_routes": [
+        "首都高速都心環状線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速都心環状線",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "首都高速都心環状線",
+        "common_refs": [
+          "C1"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              4848883
+            ],
+            "parent_contact_nodes": [
+              31254342,
+              2153861392
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              4848883
+            ],
+            "node": 31254342,
+            "parent_ways": [
+              1284334992
+            ],
+            "refs": {
+              "1284334992": "C1",
+              "4848883": "C1"
+            }
+          },
+          {
+            "alias_ways": [
+              4848883
+            ],
+            "node": 2153861392,
+            "parent_ways": [
+              205411842
+            ],
+            "refs": {
+              "205411842": "C1",
+              "4848883": "C1"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "首都高速都心環状線(第2通行帯)",
+        "old_key": "r24da81c187",
+        "parent_key": "r9f594a34dc",
+        "verified": true,
+        "way_ids": [
+          4848883
+        ]
+      },
+      "alias_of": "首都高速都心環状線",
+      "candidate": null,
+      "display_name": "首都高速都心環状線(第2通行帯)",
+      "evidence": {
+        "fare_class_basis": "計画2.3の首都高速自動指定",
+        "handling_basis": "計画2.3: 首都高速の自動指定",
+        "operator_basis": "計画2.3の首都高速自動指定"
+      },
+      "fare_class": "首都高",
+      "handling": "対象",
+      "key": "r9f594a34dc",
+      "n06_routes": [
+        "首都高速都心環状線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "首都高速都心環状線(第2通行帯)",
+      "operator": "首都高速道路",
+      "toll_handling": "有料路線"
+    },
+    {
+      "candidate": null,
+      "display_name": "高崎バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "rf84849329a",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "高崎バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "高崎前橋バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "Tak 2026-11-06: tollタグ無し路線は境界除外",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "除外",
+      "key": "ra7340b7a82",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "高崎前橋バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "alias_basis": {
+        "alias_of": "関越自動車道",
+        "common_refs": [
+          "E17"
+        ],
+        "components": [
+          {
+            "alias_ways": [
+              117720018
+            ],
+            "parent_contact_nodes": [
+              1325642042,
+              1879128308
+            ]
+          },
+          {
+            "alias_ways": [
+              117720013
+            ],
+            "parent_contact_nodes": [
+              1325642043,
+              1879128309
+            ]
+          }
+        ],
+        "contacts": [
+          {
+            "alias_ways": [
+              117720018
+            ],
+            "node": 1325642042,
+            "parent_ways": [
+              403099639
+            ],
+            "refs": {
+              "117720018": "E17",
+              "403099639": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              117720013
+            ],
+            "node": 1325642043,
+            "parent_ways": [
+              117720016
+            ],
+            "refs": {
+              "117720013": "E17",
+              "117720016": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              117720018
+            ],
+            "node": 1879128308,
+            "parent_ways": [
+              177477442
+            ],
+            "refs": {
+              "117720018": "E17",
+              "177477442": "E17"
+            }
+          },
+          {
+            "alias_ways": [
+              117720013
+            ],
+            "node": 1879128309,
+            "parent_ways": [
+              177477441
+            ],
+            "refs": {
+              "117720013": "E17",
+              "177477441": "E17"
+            }
+          }
+        ],
+        "criterion": "(ア) 部分名・親本線に挟まれる",
+        "normalized_name": "高木橋",
+        "old_key": "r8b89dd6a1e",
+        "parent_key": "re32e40a0e3",
+        "verified": true,
+        "way_ids": [
+          117720013,
+          117720018
+        ]
+      },
+      "alias_of": "関越自動車道",
+      "candidate": null,
+      "display_name": "高木橋",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re32e40a0e3",
+      "n06_routes": [
+        "関越自動車道新潟線"
+      ],
+      "n06_status": "対応あり",
+      "normalized_name": "高木橋",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    },
+    {
+      "candidate": null,
+      "display_name": "鬼怒バイパス",
+      "evidence": {
+        "fare_class_basis": "OSM/N06だけでは確定不可",
+        "handling_basis": "計画2.4: 区間成分のタグで判定",
+        "operator_basis": "路線全体を確定できるデータなし"
+      },
+      "fare_class": "不明",
+      "handling": "対象",
+      "key": "re554801366",
+      "n06_routes": [],
+      "n06_status": "N06に路線なし",
+      "normalized_name": "鬼怒バイパス",
+      "operator": "不明",
+      "toll_handling": "タグに従う"
+    }
+  ],
+  "status": "確定（G1 改訂 1、2026-11-07）"
+}
