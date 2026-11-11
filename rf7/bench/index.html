@@ -19,6 +19,11 @@
 <p id="x2Status" role="status"></p>
 <textarea id="x2Result" readonly aria-label="余裕の確かめの結果"></textarea>
 <button id="copyX2" disabled>結果をコピー</button>
+<h2>調整の候補の計測</h2>
+<button id="levels" disabled>調整の候補の計測（約 2〜3 分）</button>
+<p id="levelsStatus" role="status"></p>
+<textarea id="levelsResult" readonly aria-label="調整の候補の計測の結果"></textarea>
+<button id="copyLevels" disabled>結果をコピー</button>
 <p id="copyStatus" role="status"></p>
 <script src="bench.js"></script>
 <script>
@@ -44,6 +49,19 @@ const env = {
 };
 el('version').textContent = RF7Bench.VERSION;
 const paint = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+let busy = false, filesOk = false, mainComplete = false, progressId = 'status';
+env.yield = paint;
+env.progress = p => {
+  el(progressId).textContent = '計測中 ' + p.done + '/' + p.total + '（' + p.name + '、' + p.maxLabels + '、' + p.run + '回目）';
+};
+function updateButtons() {
+  el('start').disabled = busy || !filesOk;
+  el('x2').disabled = busy || !mainComplete;
+  el('levels').disabled = busy || !mainComplete;
+  for (const [button, result] of [['copyMain', 'mainResult'], ['copyX2', 'x2Result'], ['copyLevels', 'levelsResult']]) {
+    el(button).disabled = busy || !el(result).value;
+  }
+}
 async function copy(id) {
   try {
     await navigator.clipboard.writeText(el(id).value);
@@ -57,41 +75,70 @@ async function copy(id) {
 }
 el('copyMain').onclick = () => copy('mainResult');
 el('copyX2').onclick = () => copy('x2Result');
+el('copyLevels').onclick = () => copy('levelsResult');
 el('start').onclick = async () => {
-  el('start').disabled = true;
-  el('x2').disabled = true;
-  el('copyMain').disabled = true;
-  el('copyX2').disabled = true;
+  if (busy) return;
+  busy = true;
+  mainComplete = false;
+  progressId = 'status';
   el('mainResult').value = '';
   el('x2Result').value = '';
+  el('levelsResult').value = '';
   el('x2Status').textContent = '';
+  el('levelsStatus').textContent = '';
   el('status').textContent = '計測中';
-  await paint();
+  updateButtons();
   try {
+    await paint();
     const result = await RF7Bench.runMain(env);
     el('mainResult').value = JSON.stringify(result);
     el('status').textContent = '完了';
-    el('copyMain').disabled = false;
-    el('x2').disabled = false;
+    mainComplete = true;
   } catch (error) {
     el('status').textContent = '計測失敗: ' + error.message;
+  } finally {
+    busy = false;
+    updateButtons();
   }
 };
 el('x2').onclick = async () => {
-  el('x2').disabled = true;
+  if (busy || !mainComplete) return;
+  busy = true;
   el('x2Status').textContent = '計測中';
-  await paint();
+  updateButtons();
   try {
+    await paint();
     el('x2Result').value = JSON.stringify(RF7Bench.runX2(env, env.kantoText));
     el('x2Status').textContent = '完了';
-    el('copyX2').disabled = false;
   } catch (error) {
     el('x2Status').textContent = '計測失敗: ' + error.message;
+  } finally {
+    busy = false;
+    updateButtons();
+  }
+};
+el('levels').onclick = async () => {
+  if (busy || !mainComplete) return;
+  busy = true;
+  progressId = 'levelsStatus';
+  el('levelsResult').value = '';
+  el('levelsStatus').textContent = '計測中';
+  updateButtons();
+  try {
+    await paint();
+    el('levelsResult').value = JSON.stringify(await RF7Bench.runLevels(env, env.kantoText));
+    el('levelsStatus').textContent = '完了';
+  } catch (error) {
+    el('levelsStatus').textContent = '計測失敗: ' + error.message;
+  } finally {
+    busy = false;
+    updateButtons();
   }
 };
 RF7Bench.checkFiles(env).then(result => {
   el('files').textContent = result.files.map(f => [f.path, f.bytes, f.sha256, f.match ? '一致' : '不一致'].join(' ')).join('\n');
-  el('start').disabled = !result.files.every(f => f.match);
+  filesOk = result.files.every(f => f.match);
+  updateButtons();
 }).catch(error => { el('files').textContent = '確認失敗: ' + error.message; });
 </script>
 </body>

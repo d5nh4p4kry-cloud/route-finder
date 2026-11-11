@@ -37,10 +37,10 @@ LICENSE-ODbL.txt は ODbL の約款本文ではありません。本文の所在
 | `n06_kanto.json` | 1,271,783 | `362d2ccb279baeaf1d3fbc2d59b3aa1a3ca2b859303ed5d3174e16af6b7f7a4b` |
 | `LICENSE-ODbL.txt` | 3,478 | `36d3c997d115849c928f1feb0432967743b018c563e3f5d37e3ab0eed88df030` |
 | `../engine.js` | 55,563 | `1943ca3603ed0fdf51633f24945533d78d615bd33f6d83aebab2748921a7f4b7` |
-| `../bench/bench.js` | 5,588 | `a1c93c83136cfa4f29b8cfb7903edb4c18e2b27e8f366379a5e65056fdcaa979` |
-| `../bench/index.html` | 3,819 | `7c3a92d7050886f875332dc35b7599664681e320370c38d4ebf649118dbc3a17` |
+| `../bench/bench.js` | 8,064 | `0434672223319b20b4336fcf5a78bd9817e8440e2ab851618585c0c3f1172d25` |
+| `../bench/index.html` | 5,462 | `e64a63dd3aff3db8bdf92004c71ba6e1e158d0ff932d4db29d3d5fcc74724139` |
 
-探索器 ../engine.js の版は `v7-stage5-1.3.0`。計測ページの版は `rf7-bench 1.0.0`。この README 自身のハッシュは載せていません。
+探索器 ../engine.js の版は `v7-stage5-1.3.0`。計測ページの版は `rf7-bench 1.1.0`。この README 自身のハッシュは載せていません。
 
 ## 3. 地域ごとの配置と本体のハッシュ
 
